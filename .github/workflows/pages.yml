@@ -18,7 +18,8 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # pinned: Playwright's browsers need an Ubuntu release it supports
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
 
