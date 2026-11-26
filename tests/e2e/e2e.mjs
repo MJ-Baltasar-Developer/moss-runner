@@ -202,6 +202,11 @@ await test('manifest and icons are served', async () => {
 await test('works offline once opened', async () => {
   const p = await open(DESKTOP, '?sw');
   await p.waitForFunction(async () => (await navigator.serviceWorker.ready).active?.state === 'activated');
+  // every file on the list must be publishable (GitHub Pages leaves out hidden files) and cached
+  const list = await g(p, async () => { const t = await (await fetch('sw-files.js')).text(); return t.match(/'\.\/[^']*'/g).map(x => x.slice(1, -1)); });
+  assert.ok(!list.some(f => /\/\./.test(f)), 'no hidden files: ' + list.filter(f => /\/\./.test(f)));
+  const cached = await g(p, async () => { const k = (await caches.keys()).find(k => k.startsWith('moss-run-')); return (await (await caches.open(k)).keys()).length; });
+  assert.equal(cached, list.length, 'everything cached for offline play');
   await p.reload(); await p.waitForTimeout(800); // now controlled by the service worker
   await p.context().setOffline(true);
   await p.reload();

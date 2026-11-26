@@ -5,7 +5,10 @@ importScripts('sw-files.js'); // defines self.MOSS_VERSION and self.MOSS_FILES
 const CACHE = 'moss-run-' + self.MOSS_VERSION;
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(self.MOSS_FILES)).then(() => self.skipWaiting()));
+  // each file on its own, so one missing file can't stop the rest being saved for offline play
+  e.waitUntil(caches.open(CACHE)
+    .then(c => Promise.allSettled(self.MOSS_FILES.map(f => c.add(f))))
+    .then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', e => {
