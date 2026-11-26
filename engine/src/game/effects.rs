@@ -43,19 +43,19 @@ impl Game {
     pub(crate) fn burst(&mut self, x: f64, y: f64, n: usize, colors: &[&str], o: Burst) {
         for _ in 0..n {
             let a = match o.angle {
-                Some(a) => a + self.rng.range(-o.spread, o.spread),
-                None => self.rng.range(0.0, std::f64::consts::TAU),
+                Some(a) => a + self.fx.range(-o.spread, o.spread),
+                None => self.fx.range(0.0, std::f64::consts::TAU),
             };
-            let s = self.rng.range(o.min, o.max);
-            let life = self.rng.range(0.4, 0.9) * o.life;
-            let color = if colors.is_empty() { "#fff" } else { self.rng.pick(colors) };
+            let s = self.fx.range(o.min, o.max);
+            let life = self.fx.range(0.4, 0.9) * o.life;
+            let color = if colors.is_empty() { "#fff" } else { self.fx.pick(colors) };
             let p = Particle {
                 vx: a.cos() * s + o.vx,
                 vy: a.sin() * s + o.vy,
-                size: self.rng.range(o.smin, o.smax),
+                size: self.fx.range(o.smin, o.smax),
                 g: o.g,
-                rot: self.rng.range(0.0, 6.0),
-                vr: self.rng.range(-10.0, 10.0),
+                rot: self.fx.range(0.0, 6.0),
+                vr: self.fx.range(-10.0, 10.0),
                 drag: o.drag,
                 ..Particle::plain(x, y, o.kind, life, color)
             };
@@ -64,7 +64,7 @@ impl Game {
     }
 
     pub(crate) fn float_text(&mut self, x: f64, y: f64, text: &str, color: &str, size: f64) {
-        self.parts.push(Particle {
+        self.texts.push(Particle {
             vy: -60.0,
             size,
             scroll: false,
@@ -125,12 +125,37 @@ impl Game {
                 self.set_banner(&format!("Level up! Lv {}", self.level), &format!("{name} grew stronger"), 1.6, "#cdeac0");
             }
             self.level_cheer = 1.0;
+            self.maybe_evolve();
         }
+    }
+
+    /// Moss evolves like the desktop pet: Fernando at Lv 8, Thornhood at Lv 16.
+    fn maybe_evolve(&mut self) {
+        let next = match (self.ch.name.as_str(), self.level) {
+            ("Moss", l) if l >= 8 => "fernando",
+            ("Fernando", l) if l >= 16 => "thornhood",
+            _ => return,
+        };
+        let from = self.ch.name.clone();
+        self.ch = crate::character::parse_prompt(next);
+        let to = self.ch.name.clone();
+        self.set_banner(&format!("{from} evolved into {to}!"), "A new look, the same brave heart", 3.0, "#ffd54f");
+        let (px, py) = (self.player.x, self.player.y);
+        self.burst(
+            px,
+            py - 30.0,
+            40,
+            &["#ffd54f", "#ffffff", "#cdeac0", "#6aa35e"],
+            Burst { kind: PKind::Leaf, min: 100.0, max: 360.0, g: 200.0, ..Default::default() },
+        );
+        self.add_hitstop(0.1);
+        self.sfx("evolve");
+        self.emit(Event::Evolved { name: to });
     }
 
     /// Break obstacle `i` (by a move, a dash or the shield): chips, score and XP.
     pub(crate) fn smash(&mut self, i: usize, why: &str) {
-        if self.obstacles[i].dead {
+        if self.obstacles[i].dead || self.obstacles[i].kind.def().bouncy {
             return;
         }
         self.obstacles[i].dead = true;

@@ -8,4 +8,4 @@ await init();
 export const CFG = config();
 /** The running game. The renderer reads it through snapshots (see state.js). */
 export const engine = new Engine((Math.random() * 2 ** 32) >>> 0);
-export { parsePrompt, xpNeeded };
+export { Engine, parsePrompt, xpNeeded };

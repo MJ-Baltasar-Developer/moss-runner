@@ -133,10 +133,10 @@ impl Game {
     fn update_dash(&mut self, dt: f64) {
         self.dash -= dt;
         let (px, py) = (self.player.x, self.player.y);
-        if self.rng.chance(0.9) {
-            let y = py - 28.0 + self.rng.range(-14.0, 14.0);
-            let size = self.rng.range(3.0, 7.0);
-            let color = self.rng.pick(&["#bfe9ff", "#ffffff", "#7fc9ff"]);
+        if self.fx.chance(0.9) {
+            let y = py - 28.0 + self.fx.range(-14.0, 14.0);
+            let size = self.fx.range(3.0, 7.0);
+            let color = self.fx.pick(&["#bfe9ff", "#ffffff", "#7fc9ff"]);
             self.parts.push(Particle { vx: -200.0, size, ..Particle::plain(px - 10.0, y, PKind::Spark, 0.3, color) });
         }
         self.after_t -= dt;
@@ -248,13 +248,13 @@ impl Game {
         st.t += dt;
         st.x += 1500.0 * dt;
         for _ in 0..6 {
-            let x = st.x + self.rng.range(-60.0, 10.0);
-            let y = self.rng.range(30.0, GROUND);
-            let (vx, vy) = (self.rng.range(200.0, 700.0), self.rng.range(-200.0, 200.0));
-            let life = self.rng.range(0.4, 0.9);
-            let size = self.rng.range(5.0, 9.0);
-            let color = self.rng.pick(&["#6aa35e", "#9ccc4a", "#4f8a47", "#cdeac0", "#e8c547"]);
-            let (rot, vr) = (self.rng.range(0.0, 6.0), self.rng.range(-14.0, 14.0));
+            let x = st.x + self.fx.range(-60.0, 10.0);
+            let y = self.fx.range(30.0, GROUND);
+            let (vx, vy) = (self.fx.range(200.0, 700.0), self.fx.range(-200.0, 200.0));
+            let life = self.fx.range(0.4, 0.9);
+            let size = self.fx.range(5.0, 9.0);
+            let color = self.fx.pick(&["#6aa35e", "#9ccc4a", "#4f8a47", "#cdeac0", "#e8c547"]);
+            let (rot, vr) = (self.fx.range(0.0, 6.0), self.fx.range(-14.0, 14.0));
             self.parts.push(Particle {
                 vx,
                 vy,

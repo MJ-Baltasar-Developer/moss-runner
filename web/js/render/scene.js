@@ -1,6 +1,6 @@
 // Drawing the world: sky, hills, obstacles, the nest, orbs, the player and particles.
 import { drawCritter, drawGhostCopy } from '../character/sprite.js';
-import { CREAM, DAY, GROUND, H, MOSS, PLAYER_X, SPRITE_S, W } from '../config.js';
+import { CREAM, GROUND, palette, H, MOSS, PLAYER_X, SPRITE_S, W } from '../config.js';
 import { CFG } from '../engine.js';
 import { G } from '../state.js';
 import { circ, clamp, ell, h01, rad, rgba, rr, shade } from '../util.js';
@@ -9,7 +9,7 @@ export const { nestStumpH: NEST_STUMP_H, nestSeat: NEST_SEAT } = CFG;
 export function nestScreenX() { return PLAYER_X + (G.stageLen - G.dist); }
 
 export function drawBackground(c) {
-  const pal = DAY[(G.stage - 1) % DAY.length];
+  const pal = palette(G.day, G.biome);
   const sky = c.createLinearGradient(0, 0, 0, GROUND);
   sky.addColorStop(0, pal.sky[0]); sky.addColorStop(1, pal.sky[1]);
   c.fillStyle = sky; c.fillRect(0, 0, W, H);
@@ -42,12 +42,28 @@ export function drawBackground(c) {
     if (h01(i * 3.1) > 0.62) continue;
     const x = i * sp - off * k + h01(i) * 60, s = 0.7 + h01(i + 2) * 0.6, base = GROUND - 4;
     c.fillStyle = shade(pal.ground, -0.15); c.fillRect(x - 4 * s, base - 46 * s, 8 * s, 46 * s);
-    if (h01(i + 5) < 0.5) {
+    if (h01(i + 5) < 0.5 && G.biome !== 1) {
       c.fillStyle = pal.treeDk; circ(c, x, base - 60 * s, 28 * s); c.fill();
       c.fillStyle = pal.tree; circ(c, x - 10 * s, base - 66 * s, 20 * s); c.fill(); circ(c, x + 12 * s, base - 58 * s, 18 * s); c.fill();
     } else {
       c.fillStyle = pal.treeDk; c.beginPath(); c.moveTo(x - 26 * s, base - 30 * s); c.lineTo(x, base - 110 * s); c.lineTo(x + 26 * s, base - 30 * s); c.fill();
       c.fillStyle = pal.tree; c.beginPath(); c.moveTo(x - 20 * s, base - 62 * s); c.lineTo(x, base - 118 * s); c.lineTo(x + 20 * s, base - 62 * s); c.fill();
+      if (G.biome === 1) { c.fillStyle = '#ffffff'; c.beginPath(); c.moveTo(x - 9 * s, base - 96 * s); c.lineTo(x, base - 118 * s); c.lineTo(x + 9 * s, base - 96 * s); c.fill(); }
+    }
+  }
+  // weather: snow on the peaks, fireflies in the swamp
+  if (G.biome === 1) {
+    c.fillStyle = 'rgba(255,255,255,0.85)';
+    for (let i = 0; i < 60; i++) {
+      const x = ((h01(i) * W * 1.2 - off * 0.4 - G.t * 20 * h01(i + 3)) % (W * 1.2) + W * 1.2) % (W * 1.2);
+      const y = (h01(i + 7) * GROUND + G.t * (30 + 40 * h01(i + 1))) % GROUND;
+      circ(c, x, y, 1 + 2 * h01(i + 2)); c.fill();
+    }
+  } else if (G.biome === 2) {
+    for (let i = 0; i < 18; i++) {
+      const x = ((h01(i) * W * 1.3 - off * 0.3 + Math.sin(G.t + i) * 20) % (W * 1.3) + W * 1.3) % (W * 1.3);
+      const y = 180 + h01(i + 4) * 150 + Math.sin(G.t * 1.7 + i * 2) * 14;
+      c.fillStyle = `rgba(230,255,140,${0.25 + 0.5 * Math.abs(Math.sin(G.t * 2 + i))})`; circ(c, x, y, 2.4); c.fill();
     }
   }
   // ground
@@ -119,6 +135,53 @@ export function drawObstacle(c, o) {
     c.fillStyle = '#5f9150'; ell(c, -12, -4, 22, 14); c.fill(); ell(c, 16, 2, 20, 13); c.fill();
     c.fillStyle = '#7a3d6b'; circ(c, -18, 10, 3); c.fill(); circ(c, 8, 14, 3); c.fill(); circ(c, 22, 8, 3); c.fill();
     c.restore();
+  } else if (o.type === 'snowball') {
+    // rolls towards you
+    const r = w / 2, cxo = x + r, cyo = y + h - r;
+    c.fillStyle = 'rgba(0,0,0,0.15)'; ell(c, cxo, GROUND + 2, r + 2, 4); c.fill();
+    c.save(); c.translate(cxo, cyo); c.rotate(-o.t * 6);
+    c.fillStyle = '#f7fbff'; circ(c, 0, 0, r); c.fill();
+    c.fillStyle = '#d6ebf7'; ell(c, 4, 6, r * 0.7, r * 0.5); c.fill();
+    c.fillStyle = '#ffffff'; circ(c, -7, -8, 5); c.fill();
+    c.strokeStyle = '#b9d9ec'; c.lineWidth = 2; c.beginPath(); c.arc(0, 0, r * 0.6, 0.3, 1.6); c.stroke();
+    c.restore();
+  } else if (o.type === 'icicle') {
+    const cxo = x + w / 2;
+    if (o.landed) {
+      // stuck in the ground: a short spike to hop over
+      c.fillStyle = 'rgba(0,0,0,0.15)'; ell(c, cxo, GROUND + 2, w / 2 + 4, 4); c.fill();
+      c.fillStyle = '#bfe6f7'; c.beginPath(); c.moveTo(x + 2, GROUND); c.lineTo(cxo, y); c.lineTo(x + w - 2, GROUND); c.closePath(); c.fill();
+      c.fillStyle = '#ffffff'; c.beginPath(); c.moveTo(cxo - 3, GROUND - 4); c.lineTo(cxo, y + 6); c.lineTo(cxo + 2, GROUND - 4); c.fill();
+    } else {
+      if (!o.falling) { c.fillStyle = '#e8f4fa'; ell(c, cxo, 0, w, 10); c.fill(); }
+      const shake = o.falling ? 0 : Math.sin(o.t * 40) * 0.6;
+      c.fillStyle = '#bfe6f7'; c.beginPath(); c.moveTo(x + shake, y); c.lineTo(x + w + shake, y); c.lineTo(cxo, y + h); c.closePath(); c.fill();
+      c.fillStyle = '#ffffff'; c.beginPath(); c.moveTo(cxo - 6, y + 2); c.lineTo(cxo - 1, y + 2); c.lineTo(cxo - 1, y + h - 14); c.fill();
+      if (!o.falling) { c.fillStyle = 'rgba(159,211,234,0.6)'; circ(c, cxo, y + h + 6 + (o.t * 30) % 30, 2.5); c.fill(); }
+    }
+  } else if (o.type === 'mushroom') {
+    // a bounce pad: squashes when you land on it
+    const sq = o.boing > 0 ? Math.sin(o.boing * 30) * 0.18 : 0, cxo = x + w / 2;
+    c.fillStyle = 'rgba(0,0,0,0.18)'; ell(c, cxo, GROUND + 2, w / 2, 5); c.fill();
+    c.fillStyle = '#f7efe2'; rr(c, cxo - 10, y + 18, 20, h - 18, 6); c.fill();
+    c.save(); c.translate(cxo, y + 22); c.scale(1 + sq, 1 - sq);
+    c.fillStyle = '#e0583a'; c.beginPath(); c.moveTo(-w / 2, 0); c.quadraticCurveTo(-w / 2, -26, 0, -26); c.quadraticCurveTo(w / 2, -26, w / 2, 0); c.closePath(); c.fill();
+    c.fillStyle = '#fff6e8'; circ(c, -14, -12, 5); c.fill(); circ(c, 8, -17, 4); c.fill(); circ(c, 17, -6, 3.5); c.fill();
+    c.restore();
+    c.fillStyle = '#ffd54f'; c.font = '900 14px system-ui, sans-serif'; c.textAlign = 'center';
+    c.globalAlpha = 0.6 + 0.4 * Math.sin(G.t * 6); c.fillText('▲', cxo, y - 10);
+  } else if (o.type === 'croc') {
+    // long and low; snaps its jaw
+    const snap = Math.max(0, Math.sin(o.t * 5)) * 0.35;
+    c.fillStyle = 'rgba(0,0,0,0.18)'; ell(c, x + w / 2, GROUND + 2, w / 2 + 4, 5); c.fill();
+    c.fillStyle = '#4d7a3a'; rr(c, x + 18, y + 6, w - 18, h - 6, 9); c.fill();
+    c.fillStyle = '#3d6430'; for (let i = 0; i < 4; i++) { c.beginPath(); c.moveTo(x + 30 + i * 12, y + 7); c.lineTo(x + 35 + i * 12, y); c.lineTo(x + 40 + i * 12, y + 7); c.fill(); }
+    c.save(); c.translate(x + 22, y + 14);
+    c.fillStyle = '#5a8a44'; c.save(); c.rotate(-snap); rr(c, -22, -9, 26, 10, 4); c.fill(); c.restore();
+    c.fillStyle = '#4d7a3a'; rr(c, -22, 0, 26, 9, 4); c.fill();
+    c.fillStyle = '#fff'; for (let i = 0; i < 4; i++) { c.beginPath(); c.moveTo(-20 + i * 6, 0); c.lineTo(-17 + i * 6, -4); c.lineTo(-14 + i * 6, 0); c.fill(); }
+    c.restore();
+    c.fillStyle = '#ffd54f'; circ(c, x + 24, y + 4, 3); c.fill(); c.fillStyle = '#222'; c.fillRect(x + 23.5, y + 2, 1.2, 4);
   }
   c.restore();
 }
@@ -219,34 +282,70 @@ export function drawPlayer(c) {
   c.restore();
 }
 
+/** Easy mode's checkpoint flag: grey until you reach it, then raised and green. */
+export function drawCheckpoint(c) {
+  if (!G.easy || G.practice || G.daily) return;
+  const at = G.checkpoint > 0 ? G.checkpoint : (G.stage % 5 === 0 ? G.stageLen - CFG.bossAt - 600 : G.stageLen * 0.5);
+  const x = PLAYER_X + (at - G.dist) + 20;
+  if (x < -40 || x > W + 40) return;
+  const up = G.checkpoint > 0, top = GROUND - 92;
+  c.fillStyle = '#6e4a26'; c.fillRect(x - 2, top, 4, 92);
+  const wave = Math.sin(G.t * 6) * 4, fy = up ? top : top + 52;
+  c.fillStyle = up ? '#6aa35e' : '#9aa09a';
+  c.beginPath(); c.moveTo(x + 2, fy); c.quadraticCurveTo(x + 22, fy + 4 + wave, x + 40, fy + 10); c.lineTo(x + 2, fy + 24); c.closePath(); c.fill();
+  c.fillStyle = '#ffd54f'; circ(c, x, top - 3, 4); c.fill();
+}
+
+/** Daily challenge: your best run, replayed by a second engine, drawn see-through. */
+export function drawGhost(c, gp) {
+  if (!gp || !gp.alive) return;
+  const x = gp.x + (gp.dist - G.dist);
+  if (x < -60 || x > W + 60) return;
+  const wing = gp.dash > 0 ? 30 : gp.onGround ? 10 + Math.sin(gp.runPh * 2) * 6 : gp.gliding ? 95 + Math.sin(G.t * 24) * 22 : gp.vy < 0 ? 75 : 45;
+  c.save(); c.globalAlpha = 0.33;
+  c.translate(x, gp.y); c.rotate(rad(gp.onGround ? 6 : clamp(gp.vy / 60, -10, 14))); c.scale(SPRITE_S, SPRITE_S);
+  drawCritter(c, G.char, { t: G.t, wing, mood: 'idle', eyes: 'open', run: gp.onGround ? gp.runPh : null, air: !gp.onGround });
+  c.restore();
+  c.globalAlpha = 0.7; c.fillStyle = '#cfe6ff'; c.font = '800 10px system-ui, sans-serif'; c.textAlign = 'center'; c.fillText('your best', x, gp.y - 62); c.globalAlpha = 1;
+}
+
+// Particle kinds in the engine's packed buffer (engine/src/game/mod.rs PKind)
+const DOT = 0, LEAF = 1, FEATHER = 2, CHIP = 3, SPARK = 4, RING = 5, AFTER = 7;
+
 export function drawParts(c, front) {
-  for (const p of G.parts) {
-    const a = clamp(p.life / p.max, 0, 1);
-    if (p.kind === 'text') {
-      if (!front) continue;
-      c.globalAlpha = a; c.fillStyle = p.color; c.font = `800 ${p.size}px system-ui, sans-serif`; c.textAlign = 'center';
+  if (front) {
+    // floating text ("+4 XP") drawn over everything
+    for (const p of G.texts) {
+      c.globalAlpha = clamp(p.life / p.max, 0, 1); c.fillStyle = p.color; c.font = `800 ${p.size}px system-ui, sans-serif`; c.textAlign = 'center';
       c.strokeStyle = 'rgba(0,0,0,0.45)'; c.lineWidth = 3; c.strokeText(p.text, p.x, p.y); c.fillText(p.text, p.x, p.y);
-      continue;
     }
-    if (front) continue;
+    c.globalAlpha = 1;
+    return;
+  }
+  // the rest come from the engine as one Float32Array: [x, y, size, rot, life, max, kind, colour, ring r, wing]
+  const B = G.pbuf, N = G.pstride, pal = G.palette;
+  if (!B) return;
+  for (let i = 0; i < B.length; i += N) {
+    const x = B[i], y = B[i + 1], size = B[i + 2], rot = B[i + 3], kind = B[i + 6], color = pal[B[i + 7]];
+    const a = clamp(B[i + 4] / B[i + 5], 0, 1);
     c.globalAlpha = a;
-    if (p.kind === 'after') {
-      c.save(); c.translate(p.x, p.y); c.rotate(rad(18)); c.scale(SPRITE_S, SPRITE_S);
-      c.globalAlpha = a * 0.35; drawCritter(c, G.char, { t: G.t, wing: p.snap.wing, mood: 'cheer', eyes: 'open', run: null, air: true }); c.restore();
+    if (kind === AFTER) {
+      c.save(); c.translate(x, y); c.rotate(rad(18)); c.scale(SPRITE_S, SPRITE_S);
+      c.globalAlpha = a * 0.35; drawCritter(c, G.char, { t: G.t, wing: B[i + 9], mood: 'cheer', eyes: 'open', run: null, air: true }); c.restore();
       continue;
     }
-    if (p.kind === 'ring') { c.strokeStyle = p.color; c.lineWidth = 4 * a; circ(c, p.x, p.y, p.r * (1 - a) + 8); c.stroke(); continue; }
-    c.fillStyle = p.color;
-    if (p.kind === 'leaf' || p.kind === 'feather') {
-      c.save(); c.translate(p.x, p.y); c.rotate(p.rot);
-      ell(c, 0, 0, p.size, p.size * (p.kind === 'leaf' ? 0.45 : 0.3)); c.fill(); c.restore();
-    } else if (p.kind === 'chip') {
-      c.save(); c.translate(p.x, p.y); c.rotate(p.rot); c.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2); c.restore();
-    } else if (p.kind === 'spark') {
-      const s = p.size * (0.5 + a * 0.5);
-      c.beginPath(); c.moveTo(p.x, p.y - s); c.lineTo(p.x + s * 0.3, p.y - s * 0.3); c.lineTo(p.x + s, p.y); c.lineTo(p.x + s * 0.3, p.y + s * 0.3);
-      c.lineTo(p.x, p.y + s); c.lineTo(p.x - s * 0.3, p.y + s * 0.3); c.lineTo(p.x - s, p.y); c.lineTo(p.x - s * 0.3, p.y - s * 0.3); c.fill();
-    } else { circ(c, p.x, p.y, p.size * a); c.fill(); }
+    if (kind === RING) { c.strokeStyle = color; c.lineWidth = 4 * a; circ(c, x, y, B[i + 8] * (1 - a) + 8); c.stroke(); continue; }
+    c.fillStyle = color;
+    if (kind === LEAF || kind === FEATHER) {
+      c.save(); c.translate(x, y); c.rotate(rot);
+      ell(c, 0, 0, size, size * (kind === LEAF ? 0.45 : 0.3)); c.fill(); c.restore();
+    } else if (kind === CHIP) {
+      c.save(); c.translate(x, y); c.rotate(rot); c.fillRect(-size / 2, -size / 4, size, size / 2); c.restore();
+    } else if (kind === SPARK) {
+      const s = size * (0.5 + a * 0.5);
+      c.beginPath(); c.moveTo(x, y - s); c.lineTo(x + s * 0.3, y - s * 0.3); c.lineTo(x + s, y); c.lineTo(x + s * 0.3, y + s * 0.3);
+      c.lineTo(x, y + s); c.lineTo(x - s * 0.3, y + s * 0.3); c.lineTo(x - s, y); c.lineTo(x - s * 0.3, y - s * 0.3); c.fill();
+    } else { circ(c, x, y, size * a); c.fill(); }
   }
   c.globalAlpha = 1;
 }

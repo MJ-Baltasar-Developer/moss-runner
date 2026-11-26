@@ -2,8 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Moss Run</title>
+<meta name="description" content="Hop, glide and level up your way home to the nest. Describe your own runner and it gets drawn for you.">
+<meta name="theme-color" content="#18211a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Moss Run">
 <link rel="stylesheet" href="css/style.css">
 <script type="module" src="js/main.js"></script>
 </head>
@@ -21,14 +30,27 @@
       </div>
       <div class="form-col">
         <label for="prompt">Describe your runner</label>
-        <input id="prompt" type="text" maxlength="80" value="moss" autocomplete="off" spellcheck="false">
-        <div class="examples" id="examples">Try:</div>
-        <button id="startBtn" class="primary">Run! <kbd>Enter</kbd></button>
-        <button id="practiceBtn" class="ghost">Practice the boss</button>
-        <div class="controls">
-          <kbd>Space</kbd> / tap: hop &nbsp;·&nbsp; hold: glide &nbsp;·&nbsp; tap lightly for a small hop<br>
+        <input id="prompt" type="text" maxlength="80" value="moss" autocomplete="off" spellcheck="false" enterkeyhint="go">
+        <div class="examples" id="examples"><span>Try:</span></div>
+        <div class="actions">
+          <button id="startBtn" class="primary">Run! <kbd class="keys">Enter</kbd></button>
+          <button id="dailyBtn" class="secondary">📅 Daily challenge</button>
+          <button id="practiceBtn" class="ghost">Practice the boss</button>
+        </div>
+        <label class="switch"><input type="checkbox" id="easyToggle"> <span>🌱 Easy mode: 3 hearts and checkpoints</span></label>
+        <div class="controls keys">
+          <kbd>Space</kbd>: hop &nbsp;·&nbsp; hold: glide &nbsp;·&nbsp; tap lightly for a small hop<br>
           <kbd>1</kbd>–<kbd>4</kbd> (or <kbd>Z</kbd><kbd>X</kbd><kbd>C</kbd><kbd>V</kbd>): moves, learned as you level up<br>
-          <kbd>P</kbd> pause &nbsp;·&nbsp; <kbd>M</kbd> mute &nbsp;·&nbsp; <kbd>E</kbd> change runner after a run
+          <kbd>P</kbd> pause &nbsp;·&nbsp; <kbd>M</kbd> mute &nbsp;·&nbsp; <kbd>E</kbd> change runner &nbsp;·&nbsp; 🎮 gamepads work too
+        </div>
+        <div class="controls touch-only">
+          👆 Tap to hop · hold to glide · tap the round buttons for moves · ⏸ top button to pause
+        </div>
+        <div class="tools">
+          <button id="stickersBtn" class="ghost small">🏅 Stickers <span id="stickerBadge"></span></button>
+          <button id="settingsBtn" class="ghost small">⚙️ Settings</button>
+          <button id="fullBtn" class="ghost small hidden">⛶ Full screen</button>
+          <button id="installBtn" class="ghost small hidden">⬇ Install app</button>
         </div>
         <h3>Best runs</h3>
         <ol class="scores" id="scoreList"></ol>
@@ -43,8 +65,8 @@
     <div id="overBest" class="newbest hidden">New best!</div>
     <div class="stats" id="overStats"></div>
     <div class="row">
-      <button class="primary" id="againBtn">Run again <kbd>Space</kbd></button>
-      <button class="ghost" id="editBtn">Change runner <kbd>E</kbd></button>
+      <button class="primary" id="againBtn">Run again <kbd class="keys">Space</kbd></button>
+      <button class="ghost" id="editBtn">Change runner <kbd class="keys">E</kbd></button>
     </div>
   </div>
 </div>
@@ -52,17 +74,59 @@
 <div id="clear" class="overlay hidden">
   <div class="card end-card">
     <h2 id="clearTitle">Home sweet nest!</h2>
+    <div id="clearBest" class="newbest hidden">New best today!</div>
     <div class="stats" id="clearStats"></div>
-    <button class="primary" id="nextBtn">Next stage <kbd>Space</kbd></button>
-    <div class="hint">Each stage is longer and faster. Your level and moves carry over.</div>
+    <div class="row">
+      <button class="primary" id="nextBtn">Next stage <kbd class="keys">Space</kbd></button>
+      <button class="ghost hidden" id="clearTitleBtn">Back to title</button>
+    </div>
+    <div class="hint" id="clearHint">Each stage is longer and faster. Your level and moves carry over.</div>
   </div>
 </div>
 
 <div id="pause" class="overlay hidden">
   <div class="card end-card">
     <h2>Paused</h2>
-    <button class="primary" id="resumeBtn">Resume <kbd>P</kbd></button>
+    <div class="row">
+      <button class="primary" id="resumeBtn">Resume <kbd class="keys">P</kbd></button>
+      <button class="ghost" id="quitBtn">Quit to title</button>
+    </div>
   </div>
 </div>
+
+<div id="settings" class="overlay dim modal hidden">
+  <div class="card end-card">
+    <h2>Settings</h2>
+    <div class="settings">
+      <label class="switch"><input type="checkbox" id="setEasy"> <span>🌱 Easy mode: 3 hearts, checkpoints, a bit slower</span></label>
+      <label class="range"><span>🎵 Music</span><input type="range" id="setMusic" min="0" max="1" step="0.05"></label>
+      <label class="range"><span>🔊 Sounds</span><input type="range" id="setSound" min="0" max="1" step="0.05"></label>
+      <label class="switch"><input type="checkbox" id="setMotion"> <span>Less motion: no screen shake or flashing</span></label>
+      <label class="switch"><input type="checkbox" id="setContrast"> <span>High-contrast boss warnings (yellow, not red)</span></label>
+      <label class="switch"><input type="checkbox" id="setTutorial"> <span>Show the how-to-play hints</span></label>
+    </div>
+    <div id="iosHint" class="hint hidden">To install on iPhone or iPad: tap <b>Share</b> then <b>Add to Home Screen</b>.</div>
+    <div class="row"><button class="primary" data-close>Done</button></div>
+  </div>
+</div>
+
+<div id="stickers" class="overlay dim modal hidden">
+  <div class="card sticker-card">
+    <h2>Sticker book <small id="stickerCount"></small></h2>
+    <div id="stickerGrid" class="sticker-grid"></div>
+    <div class="row"><button class="primary" data-close>Done</button></div>
+  </div>
+</div>
+
+<div id="rotate" class="overlay rotate">
+  <div class="card end-card">
+    <div class="phone-icon">📱</div>
+    <h2>Turn your phone sideways</h2>
+    <p class="hint">Moss Run plays best in landscape.</p>
+    <button class="ghost" id="rotateAnyway">Play anyway</button>
+  </div>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 </body>
 </html>

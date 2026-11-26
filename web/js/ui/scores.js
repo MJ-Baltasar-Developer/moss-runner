@@ -7,7 +7,7 @@ export function bestScore() { const s = scores(); return s.length ? s[0].score :
 export function saveRun() {
   if (G.practice) { G.lastWasBest = false; return; }
   const list = scores();
-  const entry = { score: Math.floor(G.score), stage: G.stage, level: G.level, name: G.char.name, date: new Date().toISOString().slice(0, 10) };
+  const entry = { score: Math.floor(G.score), stage: G.stage, level: G.level, name: G.char.name, easy: G.easy, date: new Date().toISOString().slice(0, 10) };
   G.lastWasBest = !list.length || entry.score > list[0].score;
   list.push(entry); list.sort((a, b) => b.score - a.score);
   store.set('mossRunner.scores', list.slice(0, 5));
@@ -20,7 +20,7 @@ export function renderScores() {
   for (const e of s) {
     const li = document.createElement('li');
     const b = document.createElement('b'); b.textContent = e.score;
-    li.append(b, ` · ${e.name} · stage ${e.stage} · Lv ${e.level}`);
+    li.append(b, ` · ${e.name} · stage ${e.stage} · Lv ${e.level}${e.easy ? ' · easy' : ''}`);
     ol.appendChild(li);
   }
 }

@@ -42,8 +42,16 @@ pub enum Event {
     Died,
     /// Show the game-over panel.
     Over,
-    /// Show the stage-cleared panel.
-    Cleared,
+    /// Show the stage-cleared panel. `flawless`: no hits taken.
+    Cleared { flawless: bool },
+    /// Lost a heart (Easy mode) but still running.
+    Hurt { hearts: u32 },
+    /// Reached the checkpoint flag.
+    Checkpoint,
+    /// The runner evolved (Moss -> Fernando -> Thornhood).
+    Evolved { name: String },
+    /// Grimwing was beaten.
+    BossDefeated,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -88,6 +96,14 @@ pub enum ObKind {
     CrowLow,
     CrowHi,
     Branch,
+    /// Snowy peaks: rolls towards you.
+    Snowball,
+    /// Snowy peaks: hangs overhead, drops as you get close and sticks in the ground.
+    Icicle,
+    /// Swamp: a bounce pad, never hurts. Land on it to spring up high.
+    Mushroom,
+    /// Swamp: long and low.
+    Croc,
 }
 
 /// Size, hitbox and behaviour of each obstacle type.
@@ -106,11 +122,27 @@ pub struct ObDef {
     pub bird: bool,
     /// Moss's training dummy from the pet: worth more XP.
     pub dummy: bool,
+    /// Can't be smashed or hurt you; landing on it bounces you up.
+    pub bouncy: bool,
+    /// Falls when the player gets close.
+    pub falls: bool,
 }
 
 impl ObKind {
     pub fn def(self) -> ObDef {
-        let base = ObDef { w: 0.0, h: 0.0, y: None, hb: [0.0; 4], wood: ["", ""], ground: true, vx: 0.0, bird: false, dummy: false };
+        let base = ObDef {
+            w: 0.0,
+            h: 0.0,
+            y: None,
+            hb: [0.0; 4],
+            wood: ["", ""],
+            ground: true,
+            vx: 0.0,
+            bird: false,
+            dummy: false,
+            bouncy: false,
+            falls: false,
+        };
         match self {
             ObKind::Log => ObDef { w: 54.0, h: 30.0, hb: [4.0, 6.0, 8.0, 6.0], wood: ["#8b5a2b", "#5e3b1a"], ..base },
             ObKind::Bramble => ObDef { w: 64.0, h: 38.0, hb: [8.0, 10.0, 16.0, 10.0], wood: ["#3f6b3a", "#7a3d6b"], ..base },
@@ -147,6 +179,19 @@ impl ObKind {
                 ground: false,
                 ..base
             },
+            ObKind::Snowball => ObDef { w: 40.0, h: 40.0, hb: [6.0, 6.0, 4.0, 6.0], wood: ["#ffffff", "#cfe6f2"], vx: 110.0, ..base },
+            ObKind::Icicle => ObDef {
+                w: 30.0,
+                h: 70.0,
+                y: Some(-10.0),
+                hb: [4.0, 8.0, 4.0, 8.0],
+                wood: ["#e6f6ff", "#9fd3ea"],
+                ground: false,
+                falls: true,
+                ..base
+            },
+            ObKind::Mushroom => ObDef { w: 58.0, h: 42.0, hb: [0.0, 6.0, 0.0, 6.0], wood: ["#e0583a", "#f7efe2"], bouncy: true, ..base },
+            ObKind::Croc => ObDef { w: 78.0, h: 26.0, hb: [8.0, 6.0, 4.0, 10.0], wood: ["#4d7a3a", "#2f4f2c"], ..base },
         }
     }
 
@@ -159,6 +204,10 @@ impl ObKind {
             "crowLow" => ObKind::CrowLow,
             "crowHi" => ObKind::CrowHi,
             "branch" => ObKind::Branch,
+            "snowball" => ObKind::Snowball,
+            "icicle" => ObKind::Icicle,
+            "mushroom" => ObKind::Mushroom,
+            "croc" => ObKind::Croc,
             _ => return None,
         })
     }
@@ -177,6 +226,12 @@ pub struct Obstacle {
     pub h: f64,
     pub t: f64,
     pub dead: bool,
+    /// Icicles: falling speed, and whether it has dropped or landed.
+    pub vy: f64,
+    pub falling: bool,
+    pub landed: bool,
+    /// Mushrooms: squash after a bounce.
+    pub boing: f64,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -378,6 +433,8 @@ pub struct Boss {
     pub vy: f64,
     pub recoil: f64,
     pub acorn_later: bool,
+    /// This swoop comes in high (stay on the ground).
+    pub high: bool,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -427,12 +484,47 @@ pub struct Arrive {
     pub done_t: f64,
 }
 
+#[derive(Serialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum RunMode {
+    Normal,
+    /// Straight to the stage 5 boss with every move learned. Not saved to best runs.
+    Practice,
+    /// One stage, the same course for everyone on the same day.
+    Daily,
+}
+
+/// Input codes for recordings: `step << 3 | code`.
+const IN_JUMP: u32 = 0;
+const IN_RELEASE: u32 = 1;
+const IN_MOVE0: u32 = 2;
+
+/// The simulation runs in fixed steps of this length, whatever the screen's frame rate, so a
+/// recording replays the same on every device.
+pub const STEP: f64 = 1.0 / 120.0;
+
+/// Most particles alive at once; the oldest go first.
+pub const MAX_PARTICLES: usize = 900;
+
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Game {
     pub state: State,
+    pub mode: RunMode,
+    pub practice: bool,
+    pub daily: bool,
+    /// Easy mode: three hearts and checkpoints.
+    pub easy: bool,
+    pub hearts: u32,
+    pub max_hearts: u32,
+    /// Distance of the checkpoint flag reached in this stage (0 = none yet).
+    pub checkpoint: f64,
     pub t: f64,
     pub stage: u32,
+    /// Which world: 0 forest, 1 snowy peaks, 2 swamp.
+    pub biome: u32,
+    /// Time-of-day palette index (0 morning ... 4 night).
+    pub day: u32,
     /// Distance run in this stage, in world pixels.
     pub dist: f64,
     /// Total scroll, for the parallax background.
@@ -448,15 +540,14 @@ pub struct Game {
     pub player: Player,
     pub obstacles: Vec<Obstacle>,
     pub orbs: Vec<Orb>,
-    pub parts: Vec<Particle>,
+    /// Floating text ("+4 XP"). Other particles go to the renderer as a packed buffer.
+    pub texts: Vec<Particle>,
     pub seeds: Vec<Seed>,
     pub shouts: Vec<Shout>,
     pub hazards: Vec<Hazard>,
     pub boss: Option<Boss>,
     pub boss_done: bool,
     pub charge: Option<Charge>,
-    /// Boss practice: not saved to best runs.
-    pub practice: bool,
     pub shake: f64,
     pub hitstop: f64,
     pub banner: Option<Banner>,
@@ -479,26 +570,59 @@ pub struct Game {
     pub orb_streak_t: f64,
     pub stage_start: f64,
     pub level_cheer: f64,
+    /// Fixed steps since the run started.
+    pub steps: u32,
+    #[serde(skip)]
+    pub(crate) parts: Vec<Particle>,
+    /// Took no hits this stage (for the "flawless" sticker).
+    #[serde(skip)]
+    flawless: bool,
     #[serde(skip)]
     after_t: f64,
     #[serde(skip)]
     prev_state: State,
     #[serde(skip)]
     pub ch: Traits,
+    /// The description the run started with (evolutions change `ch` during a run).
+    #[serde(skip)]
+    prompt: String,
     #[serde(skip)]
     rng: Rng,
+    #[serde(skip)]
+    fx: Rng,
+    #[serde(skip)]
+    daily_seed: u32,
+    #[serde(skip)]
+    acc: f64,
+    #[serde(skip)]
+    recording: Vec<u32>,
+    #[serde(skip)]
+    script: Vec<u32>,
+    #[serde(skip)]
+    script_at: usize,
     #[serde(skip)]
     events: Vec<Event>,
     #[serde(skip)]
     next_id: u32,
+    #[serde(skip)]
+    palette: Vec<String>,
 }
 
 impl Game {
     pub fn new(seed: u64) -> Self {
         Game {
             state: State::Title,
+            mode: RunMode::Normal,
+            practice: false,
+            daily: false,
+            easy: false,
+            hearts: 1,
+            max_hearts: 1,
+            checkpoint: 0.0,
             t: 0.0,
             stage: 1,
+            biome: 0,
+            day: 0,
             dist: 0.0,
             scroll: 0.0,
             speed: 0.0,
@@ -512,14 +636,13 @@ impl Game {
             player: Player::new(),
             obstacles: vec![],
             orbs: vec![],
-            parts: vec![],
+            texts: vec![],
             seeds: vec![],
             shouts: vec![],
             hazards: vec![],
             boss: None,
             boss_done: false,
             charge: None,
-            practice: false,
             shake: 0.0,
             hitstop: 0.0,
             banner: None,
@@ -537,12 +660,23 @@ impl Game {
             orb_streak_t: 0.0,
             stage_start: 0.0,
             level_cheer: 0.0,
+            steps: 0,
+            parts: vec![],
+            flawless: true,
             after_t: 0.0,
             prev_state: State::Play,
             ch: parse_prompt("moss"),
+            prompt: "moss".into(),
             rng: Rng::new(seed),
+            fx: Rng::new(seed ^ 0x5eed),
+            daily_seed: 0,
+            acc: 0.0,
+            recording: vec![],
+            script: vec![],
+            script_at: 0,
             events: vec![],
             next_id: 1,
+            palette: vec![],
         }
     }
 
@@ -559,9 +693,19 @@ impl Game {
         self.events.push(Event::Sfx { name, arg });
     }
 
+    pub(crate) fn emit(&mut self, e: Event) {
+        self.events.push(e);
+    }
+
+    /// Set the runner from a description. Runs start from this (evolutions change it mid-run).
     pub fn set_character(&mut self, prompt: &str) -> &Traits {
+        self.prompt = prompt.to_string();
         self.ch = parse_prompt(prompt);
         &self.ch
+    }
+
+    pub fn set_easy(&mut self, on: bool) {
+        self.easy = on;
     }
 
     /// Where the nest is on screen.
@@ -572,19 +716,37 @@ impl Game {
     // ---- runs and stages ----
 
     pub fn new_run(&mut self) {
-        self.reset_run(1, false);
+        self.reset_run(1, RunMode::Normal);
         self.start_stage(1);
     }
 
     /// Jump straight to the stage 5 boss with every move learned. Not saved to best runs.
     pub fn start_practice(&mut self) {
-        self.reset_run(7, true);
+        self.reset_run(7, RunMode::Practice);
         self.start_stage(5);
         self.dist = self.stage_len - BOSS_AT - 500.0;
         self.set_banner("Boss practice", "Stage 5 · all moves learned · not saved to best runs", 2.2, "#ffd54f");
     }
 
-    fn reset_run(&mut self, level: u32, practice: bool) {
+    /// Today's challenge: one stage built from `seed`, the same course for everyone.
+    pub fn start_daily(&mut self, seed: u32) {
+        self.daily_seed = seed;
+        self.rng = Rng::new(seed as u64);
+        self.fx = Rng::new(seed as u64 ^ 0x5eed);
+        self.reset_run(4, RunMode::Daily);
+        self.start_stage(3);
+        self.biome = seed % 3;
+        self.day = (seed / 3) % DAY_NAMES.len() as u32;
+        self.stage_len = stage_len_px(4);
+        let world = ["the forest", "the snowy peaks", "the swamp"][self.biome as usize];
+        let sub = format!("Same course for everyone today · {} m through {world}", (self.stage_len / PX_PER_M).round());
+        self.set_banner("Daily challenge", &sub, 2.6, "#ffd54f");
+    }
+
+    fn reset_run(&mut self, level: u32, mode: RunMode) {
+        self.mode = mode;
+        self.practice = mode == RunMode::Practice;
+        self.daily = mode == RunMode::Daily;
         self.stage = 1;
         self.score = 0.0;
         self.orb_count = 0;
@@ -593,25 +755,48 @@ impl Game {
         self.xp = 0;
         self.max_level = level;
         self.cds.clear();
-        self.practice = practice;
+        self.ch = parse_prompt(&self.prompt);
+        self.max_hearts = if self.easy { 3 } else { 1 };
+        self.steps = 0;
+        self.acc = 0.0;
+        self.recording.clear();
+        self.checkpoint = 0.0;
     }
 
+    /// Restart after losing. Easy mode retries the same stage from its checkpoint flag;
+    /// otherwise the run starts over.
     pub fn restart_run(&mut self) {
-        if self.practice {
-            self.start_practice()
-        } else {
-            self.new_run()
+        match self.mode {
+            RunMode::Practice => self.start_practice(),
+            RunMode::Daily => self.start_daily(self.daily_seed),
+            RunMode::Normal if self.easy => {
+                let (stage, cp) = (self.stage, self.checkpoint);
+                self.score = self.stage_start;
+                self.start_stage(stage);
+                if cp > 0.0 {
+                    self.dist = cp;
+                    self.checkpoint = cp;
+                    self.next_spawn = 500.0;
+                }
+            }
+            RunMode::Normal => self.new_run(),
         }
     }
 
     pub fn next_stage(&mut self) {
-        self.start_stage(self.stage + 1);
+        if self.daily {
+            self.start_daily(self.daily_seed);
+        } else {
+            self.start_stage(self.stage + 1);
+        }
     }
 
     pub fn start_stage(&mut self, s: u32) {
         self.stage = s;
+        self.biome = biome_of(s);
+        self.day = (s - 1) % DAY_NAMES.len() as u32;
         self.dist = 0.0;
-        self.speed = stage_speed(s) * 0.6;
+        self.speed = self.base_speed() * 0.6;
         self.stage_len = stage_len_px(s);
         self.obstacles.clear();
         self.orbs.clear();
@@ -631,25 +816,41 @@ impl Game {
         self.boss = None;
         self.boss_done = false;
         self.charge = None;
+        self.checkpoint = 0.0;
+        self.hearts = self.max_hearts;
+        self.flawless = true;
         self.player = Player::new();
         for m in MOVES {
             self.cds.insert(m.id, 0.0);
         }
         self.state = State::Play;
         self.events.push(Event::Started);
+        let world = ["", " · Snowy Peaks", " · The Swamp"][self.biome as usize];
         let sub = format!(
-            "{} · {} m to the nest{}",
-            DAY_NAMES[((s - 1) as usize) % DAY_NAMES.len()],
+            "{}{world} · {} m to the nest{}",
+            DAY_NAMES[self.day as usize],
             (self.stage_len / PX_PER_M).round(),
             if is_boss_stage(s) { " · a boss guards it!" } else { "" }
         );
         self.set_banner(&format!("Stage {s}"), &sub, 2.2, CREAM);
     }
 
+    /// Running speed for the stage before the end-of-stage speed-up; Easy mode is a bit slower.
+    pub(crate) fn base_speed(&self) -> f64 {
+        stage_speed(self.stage) * if self.easy { 0.85 } else { 1.0 }
+    }
+
     // ---- input ----
+
+    fn record(&mut self, code: u32) {
+        if matches!(self.state, State::Play | State::Arrive) && self.script.is_empty() {
+            self.recording.push(self.steps << 3 | code);
+        }
+    }
 
     /// Space, tap or click. Also restarts after a run and moves on after a cleared stage.
     pub fn jump_press(&mut self) {
+        self.record(IN_JUMP);
         match self.state {
             State::Play => {
                 self.held = true;
@@ -668,10 +869,17 @@ impl Game {
 
     /// Letting go early makes a small hop.
     pub fn jump_release(&mut self) {
+        self.record(IN_RELEASE);
         self.held = false;
         if self.state == State::Play && self.player.vy < JUMP_CUT {
             self.player.vy = JUMP_CUT;
         }
+    }
+
+    /// Use move `i` (0-3).
+    pub fn press_move(&mut self, i: usize) {
+        self.record(IN_MOVE0 + i as u32);
+        self.use_move(i);
     }
 
     pub fn toggle_pause(&mut self) {
@@ -689,16 +897,120 @@ impl Game {
         self.state = State::Title;
     }
 
-    /// Advance the game by `dt` seconds. During hitstop the world freezes for a moment.
+    // ---- recordings (ghost replays) ----
+
+    /// Every input of this run so far, as `step << 3 | code`.
+    pub fn recording(&self) -> &[u32] {
+        &self.recording
+    }
+
+    /// Play back a recording: its inputs are applied at the same steps they were made.
+    pub fn set_script(&mut self, inputs: Vec<u32>) {
+        self.script = inputs;
+        self.script_at = 0;
+    }
+
+    fn apply_script(&mut self) {
+        while let Some(&v) = self.script.get(self.script_at) {
+            if v >> 3 != self.steps {
+                break;
+            }
+            self.script_at += 1;
+            match v & 7 {
+                IN_JUMP => self.jump_press(),
+                IN_RELEASE => self.jump_release(),
+                c => self.use_move((c - IN_MOVE0) as usize),
+            }
+        }
+    }
+
+    // ---- time ----
+
+    /// Advance the game by `dt` seconds of real time, in fixed steps.
     pub fn frame(&mut self, dt: f64) {
         if self.state == State::Paused || self.state == State::Title {
             return;
         }
-        if self.hitstop > 0.0 {
-            self.hitstop -= dt;
-            self.t += dt * 0.2;
-        } else {
-            self.update(dt);
+        self.acc += dt.min(0.1);
+        while self.acc >= STEP {
+            self.acc -= STEP;
+            self.step();
+            if self.state == State::Paused || self.state == State::Title {
+                break;
+            }
         }
     }
+
+    /// One fixed step. During hitstop the world freezes for a moment.
+    pub fn step(&mut self) {
+        if !self.script.is_empty() {
+            self.apply_script();
+        }
+        if self.hitstop > 0.0 {
+            self.hitstop -= STEP;
+            self.t += STEP * 0.2;
+        } else {
+            self.update(STEP);
+        }
+        // keep the particle count bounded even while hitstop pauses the update
+        if self.parts.len() > MAX_PARTICLES {
+            let extra = self.parts.len() - MAX_PARTICLES;
+            self.parts.drain(0..extra);
+        }
+        self.steps += 1;
+    }
+
+    // ---- particles for the renderer ----
+
+    /// Floats per particle in `particle_buffer`.
+    pub const PARTICLE_STRIDE: usize = 10;
+
+    /// All particles packed as `[x, y, size, rot, life, max, kind, colour, ring radius, wing]`,
+    /// so the renderer gets them without building hundreds of objects every frame.
+    /// Colours are indices into `palette()`.
+    pub fn particle_buffer(&mut self) -> Vec<f32> {
+        let mut out = Vec::with_capacity(self.parts.len() * Self::PARTICLE_STRIDE);
+        for i in 0..self.parts.len() {
+            let c = self.color_index(i);
+            let p = &self.parts[i];
+            out.extend_from_slice(&[
+                p.x as f32,
+                p.y as f32,
+                p.size as f32,
+                p.rot as f32,
+                p.life as f32,
+                p.max as f32,
+                p.kind as u8 as f32,
+                c as f32,
+                p.r.unwrap_or(0.0) as f32,
+                p.snap.as_ref().map_or(0.0, |s| s.wing) as f32,
+            ]);
+        }
+        out
+    }
+
+    fn color_index(&mut self, i: usize) -> usize {
+        let c = &self.parts[i].color;
+        match self.palette.iter().position(|p| p == c) {
+            Some(k) => k,
+            None => {
+                self.palette.push(c.clone());
+                self.palette.len() - 1
+            }
+        }
+    }
+
+    /// Colours used by `particle_buffer`; it only ever grows.
+    pub fn palette(&self) -> &[String] {
+        &self.palette
+    }
+
+    pub fn particle_count(&self) -> usize {
+        self.parts.len()
+    }
+}
+
+/// Which world a stage is in: five stages each of forest, snowy peaks and swamp, then round again.
+pub fn biome_of(stage: u32) -> u32 {
+    ((stage - 1) / 5) % 3
 }

@@ -4,6 +4,7 @@ import { GROUND, W } from '../config.js';
 import { CFG } from '../engine.js';
 import { G } from '../state.js';
 import { circ, ell, rr } from '../util.js';
+import { settings } from '../settings.js';
 
 export const BOSS_NAME = CFG.bossName;
 const LANE = { low: CFG.laneLow, high: CFG.laneHigh }; // feather heights: low = hop over, high = stay on the ground
@@ -12,20 +13,28 @@ export function drawBoss(c) {
   const B = G.boss; if (!B) return;
   const white = B.hurt > 0;
   const col = v => white ? '#ffffff' : v;
-  // telegraphs
+  // telegraphs: where the next attack will be. Red, or yellow in the high-contrast setting;
+  // they blink unless reduced motion is on.
   if (!B.dying) {
-    const blink = 0.35 + 0.35 * Math.abs(Math.sin(G.t * 14));
+    const blink = settings.reducedMotion ? 0.6 : 0.35 + 0.35 * Math.abs(Math.sin(G.t * 14));
+    const warn = a => settings.contrast ? `rgba(255,214,0,${Math.min(1, a + 0.25)})` : `rgba(255,82,82,${a})`;
     if (B.mode === 'swoop' && B.phase === 'rise') {
-      c.fillStyle = `rgba(255,82,82,${blink * 0.45})`; c.fillRect(0, GROUND - 68, W, 48);
+      // low swoop: hop over him; high swoop: stay on the ground
+      const y = B.high ? GROUND - 140 - 26 : GROUND - 68;
+      c.fillStyle = warn(blink * 0.45); c.fillRect(0, y, W, 48);
+      if (settings.contrast) { c.strokeStyle = '#111'; c.lineWidth = 3; c.strokeRect(-2, y, W + 4, 48); }
       c.fillStyle = `rgba(255,255,255,${blink + 0.2})`; c.font = '900 26px system-ui, sans-serif'; c.textAlign = 'center';
-      for (let i = 0; i < 3; i++) c.fillText('‹', W - 150 - i * 40, GROUND - 34);
+      for (let i = 0; i < 3; i++) c.fillText('‹', W - 150 - i * 40, y + 34);
+      c.font = '900 18px system-ui, sans-serif'; c.lineWidth = 4; c.strokeStyle = 'rgba(30,20,30,0.8)';
+      const say = B.high ? 'Stay down!' : 'Hop!';
+      c.strokeText(say, W / 2, y + 31); c.fillText(say, W / 2, y + 31);
     }
     if (B.mode === 'volley' && B.modeT < B.tele) {
-      c.fillStyle = `rgba(255,82,82,${blink + 0.2})`;
+      c.fillStyle = warn(blink + 0.2);
       B.pattern.forEach((lane, i) => { const y = LANE[lane], x = W - 30 - i * 26; c.beginPath(); c.moveTo(x, y - 8); c.lineTo(x - 14, y); c.lineTo(x, y + 8); c.fill(); });
     }
     if (B.mode === 'stomp' && B.phase === 'rise') {
-      c.fillStyle = `rgba(255,82,82,${blink * 0.5})`; ell(c, B.homeX, GROUND + 2, 70, 9); c.fill();
+      c.fillStyle = warn(blink * 0.5); ell(c, B.homeX, GROUND + 2, 70, 9); c.fill();
     }
   }
   c.save();
@@ -115,7 +124,7 @@ export function drawBossHUD(c) {
   c.textAlign = 'right'; c.fillText(B.dying ? 'defeated!' : B.enraged ? 'FURIOUS' : `${B.hp} / ${B.max}`, x + w + 32, y + 9);
   c.fillStyle = 'rgba(255,255,255,0.15)'; rr(c, x, y + 15, w + 32, 8, 4); c.fill();
   const f = B.hp / B.max;
-  c.fillStyle = B.enraged ? (Math.floor(G.t * 8) % 2 ? '#ff5252' : '#ff8a80') : '#e53935';
+  c.fillStyle = B.enraged ? (Math.floor(G.t * 8) % 2 && !settings.reducedMotion ? '#ff5252' : '#ff8a80') : '#e53935';
   if (f > 0) { rr(c, x, y + 15, Math.max(8, (w + 32) * f), 8, 4); c.fill(); }
 }
 

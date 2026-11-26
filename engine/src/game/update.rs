@@ -34,7 +34,7 @@ impl Game {
             State::Play => {
                 let prog = self.dist / self.stage_len;
                 let dashing = self.dash > 0.0;
-                let target = stage_speed(self.stage) * (1.0 + 0.18 * prog) * if dashing { 1.9 } else { 1.0 };
+                let target = self.base_speed() * (1.0 + 0.18 * prog) * if dashing { 1.9 } else { 1.0 };
                 self.speed += (target - self.speed) * (dt * if dashing { 10.0 } else { 2.5 }).min(1.0);
             }
             State::Arrive | State::Dying => self.speed *= (-3.2 * dt).exp(),
@@ -61,6 +61,17 @@ impl Game {
                 self.start_boss();
             }
 
+            // ---- Easy mode checkpoint: halfway, or just before the boss ----
+            if self.easy && self.mode == RunMode::Normal && self.checkpoint == 0.0 {
+                let at = if boss_ahead { self.stage_len - BOSS_AT - 600.0 } else { self.stage_len * 0.5 };
+                if self.dist >= at {
+                    self.checkpoint = self.dist;
+                    self.shout("Checkpoint!");
+                    self.sfx("checkpoint");
+                    self.emit(Event::Checkpoint);
+                }
+            }
+
             // ---- arrival at the nest ----
             if remaining <= 230.0 && self.boss.is_none() {
                 self.state = State::Arrive;
@@ -75,10 +86,44 @@ impl Game {
 
         // ---- world objects scroll past ----
         let playing = self.state == State::Play;
-        for o in self.obstacles.iter_mut() {
-            let vx = o.kind.def().vx;
-            o.x -= mv + if vx != 0.0 && playing { vx * dt } else { 0.0 };
+        let (px, speed) = (self.player.x, self.speed.max(200.0));
+        let mut landed_icicles = vec![];
+        for (i, o) in self.obstacles.iter_mut().enumerate() {
+            let d = o.kind.def();
+            o.x -= mv + if d.vx != 0.0 && playing { d.vx * dt } else { 0.0 };
             o.t += dt;
+            if o.boing > 0.0 {
+                o.boing -= dt;
+            }
+            // icicles drop when you get close (timed to land just ahead of you), then stick in the ground
+            if d.falls && !o.landed {
+                if !o.falling && playing && o.x - px < speed * 0.85 {
+                    o.falling = true;
+                }
+                if o.falling {
+                    o.vy += 1800.0 * dt;
+                    o.y += o.vy * dt;
+                    if o.y + o.h >= GROUND + 6.0 {
+                        o.landed = true;
+                        o.h = 36.0;
+                        o.y = GROUND - 30.0;
+                        o.vy = 0.0;
+                        landed_icicles.push(i);
+                    }
+                }
+            }
+        }
+        for i in landed_icicles {
+            let o = &self.obstacles[i];
+            let (x, w) = (o.x, o.w);
+            self.burst(
+                x + w / 2.0,
+                GROUND,
+                10,
+                &["#e6f6ff", "#9fd3ea", "#ffffff"],
+                Burst { kind: PKind::Chip, min: 80.0, max: 240.0, g: 900.0, ..Default::default() },
+            );
+            self.sfx("crack");
         }
         self.obstacles.retain(|o| o.x + o.w > -60.0 && !o.dead);
         for orb in self.orbs.iter_mut() {
@@ -192,9 +237,9 @@ impl Game {
         }
         if self.player.on_ground {
             self.player.run_ph += dt * self.speed / 26.0;
-            if self.rng.f() < dt * 6.0 {
-                let vy = -self.rng.range(20.0, 60.0);
-                let size = self.rng.range(2.0, 3.5);
+            if self.fx.f() < dt * 6.0 {
+                let vy = -self.fx.range(20.0, 60.0);
+                let size = self.fx.range(2.0, 3.5);
                 self.parts.push(Particle {
                     vx: -40.0,
                     vy,
@@ -259,6 +304,25 @@ impl Game {
             if !(hx < ox + ow && hx + hw > ox && hy < oy + oh && hy + hh > oy) {
                 continue;
             }
+            if o.kind.def().bouncy {
+                // mushrooms: land on top to bounce high; running into the side does nothing
+                if self.player.vy > 0.0 && self.player.y <= o.y + 22.0 {
+                    self.player.vy = JUMP_V * 1.18;
+                    self.player.on_ground = false;
+                    self.player.squash = -0.2;
+                    self.obstacles[i].boing = 0.3;
+                    self.sfx("boing");
+                    let (x, y) = (self.player.x, self.player.y);
+                    self.burst(
+                        x,
+                        y,
+                        8,
+                        &["#ffd54f", "#ffffff"],
+                        Burst { kind: PKind::Spark, g: 0.0, min: 60.0, max: 160.0, ..Default::default() },
+                    );
+                }
+                continue;
+            }
             if self.dash > 0.0 {
                 self.smash(i, "dash");
             } else if self.inv > 0.0 {
@@ -267,8 +331,7 @@ impl Game {
                 self.smash(i, "shield");
                 let (px, py) = (self.player.x, self.player.y);
                 self.decoy_takes_hit(px, py);
-            } else {
-                self.die(Some(i));
+            } else if self.hit_player() {
                 break;
             }
         }
@@ -310,7 +373,8 @@ impl Game {
             a.done_t += dt;
             if a.done_t > 1.6 && self.state == State::Arrive {
                 self.state = State::Cleared;
-                self.events.push(Event::Cleared);
+                let flawless = self.flawless;
+                self.events.push(Event::Cleared { flawless });
             }
         }
         self.arrive = Some(a);
@@ -342,13 +406,40 @@ impl Game {
             }
         }
         self.parts.retain(|p| p.life > 0.0);
-        if self.parts.len() > 900 {
-            let extra = self.parts.len() - 900;
+        for p in self.texts.iter_mut() {
+            p.life -= dt;
+            p.y += p.vy * dt;
+        }
+        self.texts.retain(|p| p.life > 0.0);
+        if self.parts.len() > MAX_PARTICLES {
+            let extra = self.parts.len() - MAX_PARTICLES;
             self.parts.drain(0..extra);
         }
     }
 
-    /// The player was hit by obstacle `o` (or a boss attack): tumble, then game over.
+    /// Something hurt the player. In Easy mode a heart is lost and the run goes on while any
+    /// are left. Returns true if the run ended.
+    pub(crate) fn hit_player(&mut self) -> bool {
+        self.flawless = false;
+        if self.hearts > 1 {
+            self.hearts -= 1;
+            self.inv = 1.6;
+            self.add_shake(10.0);
+            self.add_hitstop(0.08);
+            self.sfx("ouch");
+            let (px, py) = (self.player.x, self.player.y);
+            let hearts = self.hearts;
+            self.float_text(px, py - 70.0, if hearts == 1 { "Last heart!" } else { "Ouch!" }, "#ff8a80", 16.0);
+            self.burst(px, py - 26.0, 12, &["#ff8a80", "#ffffff"], Burst { kind: PKind::Spark, g: 0.0, ..Default::default() });
+            self.emit(Event::Hurt { hearts });
+            return false;
+        }
+        self.hearts = 0;
+        self.die(None);
+        true
+    }
+
+    /// The run is over: tumble, then game over.
     pub(crate) fn die(&mut self, _o: Option<usize>) {
         self.state = State::Dying;
         self.dead_t = 0.0;
@@ -378,7 +469,7 @@ impl Game {
             &["#ffffff", "#ffe58a"],
             Burst { kind: PKind::Spark, g: 0.0, min: 100.0, max: 260.0, ..Default::default() },
         );
-        let msg = self.rng.pick(&["Oof!", "Hoo...!", "Ow!", "Bonk!"]);
+        let msg = self.fx.pick(&["Oof!", "Hoo...!", "Ow!", "Bonk!"]);
         self.shout(msg);
         self.events.push(Event::Died);
     }

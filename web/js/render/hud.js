@@ -1,14 +1,34 @@
 // The HUD: score, XP bar, progress to the nest and the move slots.
 import { Sfx } from '../audio/sfx.js';
 import { drawCritter } from '../character/sprite.js';
-import { CREAM, DAY, H, LEAF, MOSS, MOVES, PX_PER_M, W, need } from '../config.js';
+import { CREAM, DAY, WORLDS, H, LEAF, MOSS, MOVES, PX_PER_M, W, need } from '../config.js';
 import { BOSS_NAME, drawBossHUD } from './boss.js';
 import { G } from '../state.js';
 import { bestScore } from '../ui/scores.js';
+import { device } from '../device.js';
+import { ghostPose } from '../ui/daily.js';
+import { drawTutorial } from './tutorial.js';
 import { circ, clamp, ell, rr } from '../util.js';
 
-export const SLOT = 60, SLOT_GAP = 8, SLOT_Y = H - SLOT - 10;
-export function slotRect(i) { return { x: 14 + i * (SLOT + SLOT_GAP), y: SLOT_Y, w: SLOT, h: SLOT }; }
+// Move buttons: bigger on touch screens, where they're tapped with a thumb
+// On touch screens they stand in a column at the left edge (left thumb: moves, right thumb: hop),
+// so they never cover the runner; with a keyboard they sit in a row along the bottom.
+const slotSize = () => (device.kind === 'phone' ? 72 : device.touch ? 70 : 60);
+export function slotRect(i) {
+  const s = slotSize();
+  if (device.touch) return { x: 12, y: H - 10 - (4 - i) * (s + 8) + 8, w: s, h: s };
+  return { x: 14 + i * (s + 8), y: H - s - 10, w: s, h: s };
+}
+/** The round pause button at the top (for touch; also clickable with a mouse). */
+export function pauseRect() { return { x: 716, y: 12, w: 44, h: 44 }; }
+
+function heart(c, x, y, s, full) {
+  c.save(); c.translate(x, y); c.scale(s, s);
+  c.beginPath(); c.moveTo(0, 4); c.bezierCurveTo(-8, -4, -6, -11, 0, -6); c.bezierCurveTo(6, -11, 8, -4, 0, 4); c.closePath();
+  c.fillStyle = full ? '#ff5d73' : 'rgba(255,255,255,0.18)'; c.fill();
+  c.strokeStyle = full ? '#ffd0d6' : 'rgba(255,255,255,0.35)'; c.lineWidth = 1.2; c.stroke();
+  c.restore();
+}
 
 export function drawMoveIcon(c, id, x, y, s, col) {
   c.save(); c.translate(x, y); c.scale(s, s);
@@ -42,13 +62,24 @@ export function drawHUD(c) {
   c.fillStyle = LEAF; rr(c, 60, 39, Math.max(9, 156 * clamp(G.xp / need(G.level), 0, 1)), 9, 4.5); c.fill();
   c.fillStyle = 'rgba(250,240,214,0.7)'; c.font = '600 9px system-ui, sans-serif'; c.textAlign = 'right';
   c.fillText(`${G.xp}/${need(G.level)} XP`, 216, 57);
+  // hearts (Easy mode)
+  if (G.maxHearts > 1) {
+    c.fillStyle = 'rgba(61,41,23,0.75)'; rr(c, 12, 64, 26 * G.maxHearts + 10, 26, 8); c.fill();
+    for (let i = 0; i < G.maxHearts; i++) heart(c, 30 + i * 26, 78, 1.15, i < G.hearts);
+  }
+  // pause button
+  if (G.state === 'play' || G.state === 'arrive') {
+    const r = pauseRect();
+    c.fillStyle = 'rgba(38,51,38,0.78)'; circ(c, r.x + r.w / 2, r.y + r.h / 2, r.w / 2); c.fill();
+    c.fillStyle = CREAM; c.fillRect(r.x + 15, r.y + 13, 5, 18); c.fillRect(r.x + 25, r.y + 13, 5, 18);
+  }
 
   // top-center: progress to the nest
-  const px = 300, pw = 360, py = 22;
+  const px = 290, pw = 350, py = 22;
   const prog = clamp(G.dist / G.stageLen, 0, 1);
   c.fillStyle = 'rgba(38,51,38,0.78)'; rr(c, px - 10, 12, pw + 52, 40, 10); c.fill();
   c.fillStyle = CREAM; c.font = '700 11px system-ui, sans-serif'; c.textAlign = 'left';
-  c.fillText(`Stage ${G.stage} · ${DAY[(G.stage - 1) % DAY.length].name}`, px, py + 4);
+  c.fillText(G.daily ? `Daily challenge · ${WORLDS[G.biome]}` : `Stage ${G.stage} · ${G.biome ? WORLDS[G.biome] : DAY[G.day].name}`, px, py + 4);
   c.textAlign = 'right';
   c.fillText(G.boss && !G.boss.dying ? `Beat ${BOSS_NAME} to get home!` : `${Math.max(0, Math.round((G.stageLen - G.dist) / PX_PER_M))} m to the nest`, px + pw, py + 4);
   c.fillStyle = 'rgba(250,240,214,0.2)'; rr(c, px, py + 11, pw, 7, 3.5); c.fill();
@@ -65,6 +96,11 @@ export function drawHUD(c) {
   c.font = '600 11px system-ui, sans-serif'; c.fillStyle = 'rgba(250,240,214,0.7)'; c.fillText(`BEST ${best}  ·  ${G.orbCount} orbs`, W - 22, 53);
   if (Sfx.muted) { c.textAlign = 'left'; c.fillText('muted (M)', W - 156, 53); }
   if (G.practice) { c.textAlign = 'right'; c.fillStyle = '#ffd54f'; c.font = '800 10px system-ui, sans-serif'; c.fillText('PRACTICE · not saved', W - 22, 74); }
+  if (G.daily) {
+    const gp = ghostPose();
+    c.textAlign = 'right'; c.fillStyle = '#cfe6ff'; c.font = '800 10px system-ui, sans-serif';
+    c.fillText(gp ? (gp.dist > G.dist ? `👻 ghost ahead by ${Math.round((gp.dist - G.dist) / PX_PER_M)} m` : '👻 you\'re ahead of your ghost!') : 'DAILY · beat it to make a ghost', W - 22, 74);
+  }
   drawBossHUD(c);
 
   // bottom-left: move slots
@@ -77,7 +113,7 @@ export function drawHUD(c) {
     c.strokeStyle = active ? '#ffd54f' : fl > 0 ? `rgba(255,213,79,${0.5 + 0.5 * Math.sin(G.t * 12)})` : locked ? '#3f5136' : '#557d47';
     c.lineWidth = active || fl > 0 ? 3 : 2; rr(c, r.x, r.y, r.w, r.h, 9); c.stroke();
     c.globalAlpha = locked ? 0.3 : 1;
-    drawMoveIcon(c, m.id, r.x + r.w / 2, r.y + r.h / 2 - 3, 1.1, T.base);
+    drawMoveIcon(c, m.id, r.x + r.w / 2, r.y + r.h / 2 - 3, r.w / 55, T.base);
     c.globalAlpha = 1;
     if (!locked && cd > 0) {
       c.fillStyle = 'rgba(10,14,10,0.62)';
@@ -87,12 +123,12 @@ export function drawHUD(c) {
       c.fillStyle = CREAM; c.font = '800 14px system-ui, sans-serif'; c.textAlign = 'center'; c.fillText(Math.ceil(cd), r.x + r.w / 2, r.y + r.h / 2 + 5);
     }
     c.font = '700 10px ui-monospace, monospace'; c.textAlign = 'left'; c.fillStyle = locked ? 'rgba(250,240,214,0.45)' : CREAM;
-    c.fillText(m.key, r.x + 5, r.y + 12);
+    if (!device.touch) c.fillText(m.key, r.x + 5, r.y + 12);
     c.textAlign = 'center'; c.font = '700 9px system-ui, sans-serif';
     c.fillText(locked ? `Lv ${m.lv}` : m.name, r.x + r.w / 2, r.y + r.h - 4);
     c.restore();
   }
-  if (G.shield) { c.fillStyle = CREAM; c.font = '600 11px system-ui, sans-serif'; c.textAlign = 'left'; c.fillText(`decoys ${Math.ceil(G.shield.t)}s`, 14 + 4 * (SLOT + SLOT_GAP), SLOT_Y + 28); }
+  if (G.shield) { c.fillStyle = CREAM; c.font = '600 11px system-ui, sans-serif'; c.textAlign = 'left'; c.fillText(`decoys ${Math.ceil(G.shield.t)}s`, slotRect(3).x + slotRect(3).w + 10, slotRect(3).y + 28); }
 
   // banner
   if (G.banner) {
@@ -104,5 +140,6 @@ export function drawHUD(c) {
     if (b.sub) { c.font = '700 15px system-ui, sans-serif'; c.lineWidth = 4; c.strokeText(b.sub, 0, 26); c.fillStyle = CREAM; c.fillText(b.sub, 0, 26); }
     c.restore();
   }
+  drawTutorial(c);
 }
 

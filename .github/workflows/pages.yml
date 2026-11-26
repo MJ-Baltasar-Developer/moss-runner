@@ -50,6 +50,19 @@ jobs:
       - name: Build WebAssembly
         run: ./build.sh
 
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Browser tests (desktop, phone, tablet, offline)
+        working-directory: tests/e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          python3 -m http.server 8000 --directory ../../web >/dev/null 2>&1 &
+          sleep 1
+          node e2e.mjs http://localhost:8000/
+
       - uses: actions/upload-pages-artifact@v4
         with:
           path: web

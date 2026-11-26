@@ -23,3 +23,27 @@ export const DAY = [
   { name: 'Dusk', sky: ['#4e4380', '#e3978a'], sun: '#ffc9a0', far: '#6a5a7e', near: '#4d5e4f', tree: '#3c5740', treeDk: '#2f4734', ground: '#4f3a29', grass: '#4d7346', cloud: '#c9a3b8', stars: true },
   { name: 'Night', sky: ['#121a31', '#2c3b5b'], sun: '#f3efd8', far: '#283849', near: '#223a2d', tree: '#1d3627', treeDk: '#162b1f', ground: '#352719', grass: '#2d5634', cloud: '#3c4a66', stars: true, moon: true },
 ];
+
+/** The three worlds, five stages each: forest, snowy peaks, swamp. */
+export const WORLDS = ['Forest', 'Snowy Peaks', 'The Swamp'];
+const WORLD_COLORS = [
+  null,
+  { far: '#c6d8e6', near: '#a9c3d6', tree: '#2f5d4a', treeDk: '#244a3b', ground: '#dfe9f0', grass: '#ffffff' },
+  { far: '#7d9a6a', near: '#5f7d4f', tree: '#4a6b3a', treeDk: '#3a5530', ground: '#4a3d2a', grass: '#5d7a3a', sky: ['#7fa39a', '#cfe0b8'], cloud: '#e4eedd' },
+];
+// how much each time of day darkens a world's own colours
+const DARKEN = [0, 0, -0.1, -0.3, -0.55];
+
+/** Colours for a time of day (0-4) in a world (0-2). */
+export function palette(day, biome) {
+  const base = DAY[day % DAY.length], w = WORLD_COLORS[biome % 3];
+  if (!w) return base;
+  const out = { ...base };
+  for (const k in w) out[k] = Array.isArray(w[k]) ? w[k].map(v => shadeHex(v, DARKEN[day % DAY.length])) : shadeHex(w[k], DARKEN[day % DAY.length]);
+  return out;
+}
+function shadeHex(h, t) {
+  if (!t) return h;
+  const n = parseInt(h.slice(1), 16), c = [n >> 16, (n >> 8) & 255, n & 255].map(v => Math.round(v * (1 + t)));
+  return '#' + c.map(v => v.toString(16).padStart(2, '0')).join('');
+}

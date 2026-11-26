@@ -105,7 +105,67 @@ impl Engine {
     }
     #[wasm_bindgen(js_name = useMove)]
     pub fn use_move(&mut self, i: usize) {
-        self.game.use_move(i);
+        self.game.press_move(i);
+    }
+    /// Easy mode (three hearts, checkpoints, a little slower). Applies from the next run.
+    #[wasm_bindgen(js_name = setEasy)]
+    pub fn set_easy(&mut self, on: bool) {
+        self.game.set_easy(on);
+    }
+    /// Today's challenge, built from a seed (the page derives it from the date).
+    #[wasm_bindgen(js_name = startDaily)]
+    pub fn start_daily(&mut self, seed: u32) {
+        self.game.start_daily(seed);
+    }
+    /// Start a normal run at stage `n` (used by `?stage=n`).
+    #[wasm_bindgen(js_name = startAtStage)]
+    pub fn start_at_stage(&mut self, n: u32) {
+        self.game.new_run();
+        if n > 1 {
+            self.game.start_stage(n);
+        }
+    }
+    /// The runner's current traits (they change when Moss evolves).
+    pub fn character(&self) -> JsValue {
+        to_js(&self.game.ch)
+    }
+
+    // ---- particles, packed ----
+
+    /// All particles as a flat Float32Array; see `particleStride` for the layout.
+    pub fn particles(&mut self) -> Vec<f32> {
+        self.game.particle_buffer()
+    }
+    #[wasm_bindgen(js_name = particleStride)]
+    pub fn particle_stride() -> usize {
+        game::Game::PARTICLE_STRIDE
+    }
+    /// Colours the particle buffer refers to by index.
+    pub fn palette(&self) -> JsValue {
+        to_js(self.game.palette())
+    }
+    #[wasm_bindgen(js_name = paletteSize)]
+    pub fn palette_size(&self) -> usize {
+        self.game.palette().len()
+    }
+
+    // ---- recordings and ghosts ----
+
+    /// This run's inputs, for saving as a ghost.
+    pub fn recording(&self) -> Vec<u32> {
+        self.game.recording().to_vec()
+    }
+    /// Make this engine replay a recording (call right after starting the same run).
+    #[wasm_bindgen(js_name = setScript)]
+    pub fn set_script(&mut self, inputs: Vec<u32>) {
+        self.game.set_script(inputs);
+    }
+    /// Just what's needed to draw a ghost: [dist, x, y, vy, onGround, gliding, runPh, alive, dash].
+    pub fn pose(&self) -> Vec<f64> {
+        let g = &self.game;
+        let p = &g.player;
+        let alive = matches!(g.state, game::State::Play | game::State::Arrive | game::State::Cleared);
+        vec![g.dist, p.x, p.y, p.vy, p.on_ground as u8 as f64, p.gliding as u8 as f64, p.run_ph, alive as u8 as f64, g.dash]
     }
     #[wasm_bindgen(js_name = togglePause)]
     pub fn toggle_pause(&mut self) {

@@ -1,2 +1,4 @@
 engine/target/
 web/pkg/
+web/sw-files.js
+tests/e2e/node_modules/

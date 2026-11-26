@@ -3,8 +3,10 @@ import { GROUND, H, W } from '../config.js';
 import { drawBoss, drawHazards } from './boss.js';
 import { G, K, cx } from '../state.js';
 import { drawHUD } from './hud.js';
-import { NEST_STUMP_H, drawBackground, drawNest, drawObstacle, drawOrb, drawParts, drawPlayer, drawSeeds, drawShouts } from './scene.js';
+import { NEST_STUMP_H, drawBackground, drawCheckpoint, drawGhost, drawNest, drawObstacle, drawOrb, drawParts, drawPlayer, drawSeeds, drawShouts } from './scene.js';
 import { rand } from '../util.js';
+import { settings } from '../settings.js';
+import { ghostPose } from '../ui/daily.js';
 
 let titleScroll = 0; // the title backdrop scrolls on its own; the engine is idle there
 
@@ -13,16 +15,18 @@ export function render() {
   if (G.state === 'title') G.scroll = (titleScroll += 0.6);
   c.setTransform(K, 0, 0, K, 0, 0);
   c.save();
-  if (G.shake > 0) c.translate(rand(-G.shake, G.shake) * 0.6, rand(-G.shake, G.shake) * 0.6);
+  if (G.shake > 0 && !settings.reducedMotion) c.translate(rand(-G.shake, G.shake) * 0.6, rand(-G.shake, G.shake) * 0.6);
   drawBackground(c);
   if (G.state !== 'title') {
     drawNest(c, false);
+    drawCheckpoint(c);
     for (const o of G.orbs) drawOrb(c, o);
     for (const o of G.obstacles) drawObstacle(c, o);
     drawBoss(c);
     drawHazards(c);
     drawParts(c, false);
     drawSeeds(c);
+    drawGhost(c, ghostPose());
     drawPlayer(c);
     drawNest(c, true);
     if ((G.state === 'arrive' && G.arrive && G.arrive.done) || G.state === 'cleared') {

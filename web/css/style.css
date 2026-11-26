@@ -62,3 +62,81 @@ ol.scores li b { color: var(--cream); }
 .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 10px; }
 .hint { font-size: 13px; color: var(--cream-dim); margin-top: 8px; }
 @media (max-width: 560px) { h1 { font-size: 22px; } .preview-col { flex-basis: 100%; } }
+
+/* ---------- touch screens and installed app ---------- */
+html, body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
+#game, .overlay { -webkit-touch-callout: none; }
+#wrap { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+#game { width: min(100%, calc((100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * 960 / 420)); }
+.overlay { padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+html[data-touch="true"] .keys { display: none !important; }
+.touch-only { display: none; }
+html[data-touch="true"] .touch-only { display: block; }
+
+/* ---------- title screen pieces ---------- */
+.actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.secondary { background: #34482f; color: var(--cream); border: 1px solid var(--leaf); border-radius: 10px; padding: 10px 14px; font-weight: 700; }
+.secondary:hover { background: #3d5536; }
+.small { padding: 6px 10px; font-size: 13px; }
+.tools { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.switch { display: flex; gap: 8px; align-items: center; font-weight: 500; font-size: 14px; margin: 10px 0 0; cursor: pointer; }
+.switch input { width: 20px; height: 20px; accent-color: var(--leaf); flex: none; }
+.range { display: grid; grid-template-columns: 90px 1fr; gap: 10px; align-items: center; font-weight: 500; font-size: 14px; margin: 12px 0 0; }
+.range input { accent-color: var(--leaf); width: 100%; }
+.settings { text-align: left; margin: 8px 0 14px; }
+#stickerBadge { font-size: 11px; color: var(--cream-dim); }
+
+/* ---------- sticker book ---------- */
+.sticker-card { width: min(640px, 100%); text-align: center; }
+.sticker-card h2 small { font-size: 14px; color: var(--cream-dim); font-weight: 500; }
+.sticker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; margin: 12px 0; }
+.sticker { background: #1f2a1f; border: 1px solid var(--line); border-radius: 12px; padding: 10px 8px; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.sticker .icon { font-size: 34px; line-height: 1.1; }
+.sticker b { font-size: 12px; }
+.sticker small { font-size: 11px; color: var(--cream-dim); }
+.sticker.locked { opacity: .5; }
+.sticker.locked .icon { filter: grayscale(1); color: var(--cream-dim); }
+
+/* ---------- toast ---------- */
+.toast { position: fixed; left: 50%; top: max(12px, env(safe-area-inset-top)); transform: translate(-50%, -150%); z-index: 20;
+  background: #263326; border: 2px solid #ffd54f; color: var(--cream); padding: 10px 16px; border-radius: 12px; font-weight: 700;
+  box-shadow: 0 8px 24px rgba(0,0,0,.4); transition: transform .3s ease; pointer-events: none; white-space: nowrap; }
+.toast.show { transform: translate(-50%, 0); }
+
+/* ---------- rotate hint (phones held upright) ---------- */
+.rotate { display: none; background: rgba(14, 20, 14, 0.92); z-index: 15; text-align: center; }
+html[data-device="phone"][data-portrait="true"]:not(.rotate-ok) .rotate { display: flex; }
+.phone-icon { font-size: 54px; animation: turn 2s ease-in-out infinite; }
+@keyframes turn { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
+@media (prefers-reduced-motion: reduce) { .phone-icon { animation: none; } }
+
+/* ---------- phone layout: compact title screen that fits a landscape phone ---------- */
+html[data-device="phone"] .title-card { padding: 10px 14px; width: min(760px, 100%); }
+html[data-device="phone"] h1 { font-size: 20px; margin-bottom: 6px; }
+html[data-device="phone"] h1 small { display: none; }
+html[data-device="phone"] .cols { gap: 14px; flex-wrap: nowrap; }
+html[data-device="phone"] .preview-col { flex: 0 0 130px; }
+html[data-device="phone"] #preview { width: 130px; height: 130px; }
+html[data-device="phone"] .pname { font-size: 15px; margin-top: 4px; }
+html[data-device="phone"] .chips { display: none; }
+html[data-device="phone"] label[for="prompt"] { display: none; }
+html[data-device="phone"] input[type=text] { font-size: 16px; padding: 8px 10px; }
+html[data-device="phone"] .examples { flex-wrap: nowrap; overflow-x: auto; margin: 6px 0 8px; scrollbar-width: none; }
+html[data-device="phone"] .examples::-webkit-scrollbar { display: none; }
+html[data-device="phone"] .ex { white-space: nowrap; padding: 5px 10px; font-size: 13px; }
+html[data-device="phone"] .primary, html[data-device="phone"] .secondary { padding: 10px 14px; font-size: 15px; }
+html[data-device="phone"] .title-card h3, html[data-device="phone"] .scores { display: none; }
+html[data-device="phone"] .controls { margin-top: 6px; font-size: 12px; line-height: 1.5; }
+html[data-device="phone"] .switch { font-size: 13px; margin-top: 8px; }
+html[data-device="phone"] .end-card { padding: 12px 16px; }
+html[data-device="phone"] .stats { margin: 8px 0; font-size: 14px; }
+html[data-device="phone"] .sticker-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+html[data-device="phone"] .sticker .icon { font-size: 26px; }
+
+/* ---------- tablets: bigger touch targets ---------- */
+html[data-device="tablet"] .ex { padding: 5px 12px; font-size: 14px; }
+html[data-device="tablet"] .primary, html[data-device="tablet"] .secondary, html[data-device="tablet"] .ghost { min-height: 46px; }
+html[data-device="tablet"] #preview { width: 200px; height: 200px; }
+
+/* the installed app doesn't need install / full-screen buttons */
+html[data-app="true"] #installBtn, html[data-app="true"] #fullBtn { display: none !important; }

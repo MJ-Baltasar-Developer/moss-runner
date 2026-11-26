@@ -9,12 +9,12 @@ export const Sfx = {
     try {
       const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
       this.ctx = new AC();
-      this.master = this.ctx.createGain(); this.master.gain.value = this.muted ? 0 : 0.45; this.master.connect(this.ctx.destination);
+      this.master = this.ctx.createGain(); this.master.gain.value = this.muted ? 0 : 0.45 * (this.volume ?? 1); this.master.connect(this.ctx.destination);
       const n = this.ctx.sampleRate; this.noiseBuf = this.ctx.createBuffer(1, n, n);
       const d = this.noiseBuf.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
     } catch (e) { this.ctx = null; }
   },
-  toggle() { this.muted = !this.muted; store.set('mossRunner.muted', this.muted); if (this.master) this.master.gain.value = this.muted ? 0 : 0.45; },
+  toggle() { this.muted = !this.muted; store.set('mossRunner.muted', this.muted); if (this.master) this.master.gain.value = this.muted ? 0 : 0.45 * (this.volume ?? 1); },
   env(g, t, vol, dur, attack = 0.005) {
     g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + attack);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
@@ -55,3 +55,15 @@ export const Sfx = {
   feather() { this.noise(0.12, 4000, 1500, 0.1, 0, 2); },
   denied() { this.tone(200, 150, 0.1, 'square', 0.06); },
 };
+
+// Sounds for the newer features
+Object.assign(Sfx, {
+  ouch() { this.tone(520, 220, 0.25, 'square', 0.1); this.noise(0.15, 1500, 400, 0.12); },
+  checkpoint() { [0, 4, 7].forEach((s, i) => this.tone(659 * Math.pow(2, s / 12), 659 * Math.pow(2, s / 12), 0.12, 'triangle', 0.1, i * 0.08)); },
+  boing() { this.tone(180, 720, 0.22, 'sine', 0.16); this.tone(360, 1100, 0.18, 'triangle', 0.06, 0.03); },
+  crack() { this.noise(0.18, 5000, 1800, 0.18, 0, 3); this.tone(1800, 900, 0.08, 'triangle', 0.05); },
+  evolve() { [0, 2, 4, 7, 9, 12, 16, 19].forEach((s, i) => this.tone(392 * Math.pow(2, s / 12), 392 * Math.pow(2, s / 12), 0.18, 'triangle', 0.08, i * 0.07)); this.noise(1.0, 400, 3000, 0.1, 0.2, 0.8); },
+  sticker() { [12, 16, 19, 24].forEach((s, i) => this.tone(523 * Math.pow(2, s / 12), 523 * Math.pow(2, s / 12), 0.1, 'sine', 0.08, i * 0.06)); },
+  /** Sound volume 0..1 (the M key still mutes everything). */
+  setVolume(v) { this.volume = v; if (this.master) this.master.gain.value = this.muted ? 0 : 0.45 * v; },
+});

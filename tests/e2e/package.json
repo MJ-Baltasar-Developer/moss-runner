@@ -1,0 +1,8 @@
+{
+  "name": "moss-run-e2e",
+  "private": true,
+  "type": "module",
+  "description": "Browser tests for Moss Run (desktop, phone, tablet, offline)",
+  "scripts": { "test": "node e2e.mjs" },
+  "devDependencies": { "playwright": "1.56.1" }
+}

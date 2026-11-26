@@ -10,6 +10,9 @@
 
 use super::*;
 
+/// Height of a high swoop: stay on the ground and he passes overhead.
+const SWOOP_HIGH: f64 = GROUND - 140.0;
+
 fn lerp(a: f64, b: f64, t: f64) -> f64 {
     a + (b - a) * t
 }
@@ -46,6 +49,7 @@ impl Game {
             vy: 0.0,
             recoil: 0.0,
             acorn_later: false,
+            high: false,
         });
         self.hazards.clear();
         self.set_banner(
@@ -79,7 +83,9 @@ impl Game {
             }
             Mode::Swoop => {
                 b.tele = if fast { 0.6 } else { 0.9 };
-                b.swoops = if fast { 2 } else { 1 };
+                // from his second fight on he always swoops twice, the second time high
+                b.swoops = if fast || b.n >= 2 { 2 } else { 1 };
+                b.high = false;
                 b.phase = Some(Phase::Rise);
             }
             _ => {
@@ -164,6 +170,7 @@ impl Game {
             self.score += bonus as f64;
             self.set_banner(&format!("{BOSS_NAME} defeated!"), &format!("+{bonus} · the way home is clear"), 2.6, "#ffd54f");
             self.gain_xp(xp::BOSS, Some((bx, by - 60.0)));
+            self.emit(Event::BossDefeated);
         }
     }
 
@@ -191,8 +198,7 @@ impl Game {
             self.decoy_takes_hit(px, py);
             return false;
         }
-        self.die(None);
-        true
+        self.hit_player()
     }
 
     pub(crate) fn decoy_takes_hit(&mut self, px: f64, py: f64) {
@@ -309,13 +315,13 @@ impl Game {
                     b.y = lerp(b.y, 120.0, (dt * 4.0).min(1.0));
                     if b.mode_t >= b.tele {
                         b.phase = Some(Phase::Dive);
-                        b.y = GROUND - 44.0;
+                        b.y = if b.high { SWOOP_HIGH } else { GROUND - 44.0 };
                         self.sfx("dash");
                     }
                 }
                 Some(Phase::Dive) => {
                     b.x -= if b.enraged { 1050.0 } else { 950.0 } * dt;
-                    b.y = GROUND - 44.0 + (b.t * 30.0).sin() * 2.0;
+                    b.y = if b.high { SWOOP_HIGH } else { GROUND - 44.0 } + (b.t * 30.0).sin() * 2.0;
                     if live
                         && self.overlaps_player(b.x - BOSS_W / 2.0, b.y - BOSS_H / 2.0, BOSS_W, BOSS_H)
                         && self.dash <= 0.0
@@ -327,6 +333,7 @@ impl Game {
                         b.swoops -= 1;
                         b.x = W + 180.0;
                         if b.swoops > 0 {
+                            b.high = b.n >= 2 && !b.high;
                             b.phase = Some(Phase::Rise);
                             b.mode_t = 0.0;
                             b.tele = 0.5;
