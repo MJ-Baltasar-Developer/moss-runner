@@ -1,10 +1,9 @@
 // The title, game-over, stage-cleared and pause panels, and the title preview.
 import { Sfx } from '../audio/sfx.js';
-import { parsePrompt } from '../character/prompt.js';
 import { drawCritter } from '../character/sprite.js';
 import { DAY, PX_PER_M } from '../config.js';
-import { BOSS_NAME } from '../game/boss.js';
-import { G, newRun, stageLenPx, startPractice } from '../game/state.js';
+import { CFG, engine, parsePrompt } from '../engine.js';
+import { G, afterEngine, newRun, startPractice } from '../state.js';
 import { resetClock } from '../loop.js';
 import { bestScore, renderScores } from './scores.js';
 import { ell, pick, store } from '../util.js';
@@ -16,7 +15,7 @@ export function statsHTML(el, rows) {
   for (const [k, v] of rows) { const a = document.createElement('span'); a.textContent = k; const b = document.createElement('span'); b.textContent = v; el.append(a, b); }
 }
 export function showOver() {
-  $('overTitle').textContent = G.practice ? (G.boss ? `${BOSS_NAME} won this round!` : 'Practice over') : pick([`${G.char.name} took a tumble!`, 'Bonk!', 'So close to home...', 'Ouch! Feathers everywhere.']);
+  $('overTitle').textContent = G.practice ? (G.boss ? `${CFG.bossName} won this round!` : 'Practice over') : pick([`${G.char.name} took a tumble!`, 'Bonk!', 'So close to home...', 'Ouch! Feathers everywhere.']);
   $('overBest').classList.toggle('hidden', !G.lastWasBest);
   const left = Math.max(0, Math.round((G.stageLen - G.dist) / PX_PER_M));
   statsHTML($('overStats'), [['Score', Math.floor(G.score)], ['Stage', `${G.stage} (${left} m from the nest)`], ['Level', G.level], ['Orbs', G.orbCount], ['Smashed', G.smashed], ['Best', bestScore()]]);
@@ -24,24 +23,26 @@ export function showOver() {
 }
 export function showClear() {
   $('clearTitle').textContent = G.stage === 1 ? 'Home sweet nest!' : pick(['Home sweet nest!', 'Made it home!', 'Nest reached!']);
-  statsHTML($('clearStats'), [['Stage cleared', G.stage], ['Score', Math.floor(G.score)], ['Level', G.level], ['Orbs', G.orbCount], ['Next', `Stage ${G.stage + 1} · ${DAY[G.stage % DAY.length].name}`], ['Distance', `${Math.round(stageLenPx(G.stage + 1) / PX_PER_M)} m`]]);
+  statsHTML($('clearStats'), [['Stage cleared', G.stage], ['Score', Math.floor(G.score)], ['Level', G.level], ['Orbs', G.orbCount], ['Next', `Stage ${G.stage + 1} · ${DAY[G.stage % DAY.length].name}`], ['Distance', `${500 + 100 * (G.stage + 1)} m`]]);
   showPanel('clear');
 }
 export function toTitle() {
-  G.state = 'title'; showPanel('title'); renderScores(); updatePreview();
+  engine.toTitle(); afterEngine(); showPanel('title'); renderScores(); updatePreview();
   setTimeout(() => { $('prompt').focus(); $('prompt').select(); }, 30);
 }
 export function startFromTitle(practice) {
   Sfx.init();
-  G.char = parsePrompt($('prompt').value);
+  G.char = engine.setCharacter($('prompt').value);
   store.set('mossRunner.prompt', $('prompt').value);
   $('prompt').blur();
   if (practice === true) startPractice(); else newRun();
   Sfx.cry(G.char);
 }
 export function pauseToggle() {
-  if (G.state === 'play' || G.state === 'arrive') { G.prevState = G.state; G.state = 'paused'; showPanel('pause'); }
-  else if (G.state === 'paused') { G.state = G.prevState || 'play'; showPanel(null); resetClock(); }
+  const was = G.state;
+  engine.togglePause(); afterEngine();
+  if (G.state === 'paused') showPanel('pause');
+  else if (was === 'paused') { showPanel(null); resetClock(); }
 }
 
 // title preview

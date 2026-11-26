@@ -1,23 +1,20 @@
 // Keyboard, mouse and touch input.
 import { Sfx } from '../audio/sfx.js';
-import { BUFFER, H, JUMP_CUT, MOVES, W } from '../config.js';
-import { useMove } from '../game/moves.js';
-import { G, cv, restartRun, startStage } from '../game/state.js';
+import { H, MOVES, W } from '../config.js';
+import { engine } from '../engine.js';
+import { G, afterEngine, cv, restartRun } from '../state.js';
 import { slotRect } from '../render/hud.js';
 import { pauseToggle, startFromTitle, toTitle } from './panels.js';
 
 export function jumpPress() {
   Sfx.init();
-  if (G.state === 'play') { G.held = true; G.player.buffer = BUFFER; }
-  else if (G.state === 'dying' && G.deadT > 0.3) { G.state = 'dead'; restartRun(); }
-  else if (G.state === 'dead' && G.deadT > 0.3) restartRun();
-  else if (G.state === 'cleared') startStage(G.stage + 1);
-  else if (G.state === 'paused') pauseToggle();
+  if (G.state === 'paused') { pauseToggle(); return; }
+  // hop, or restart after a run, or go on after a cleared stage: the engine decides
+  engine.jumpPress(); afterEngine();
 }
+function useMove(i) { engine.useMove(i); afterEngine(); }
 export function jumpRelease() {
-  G.held = false;
-  const P = G.player;
-  if (P && G.state === 'play' && P.vy < JUMP_CUT) P.vy = JUMP_CUT;
+  engine.jumpRelease(); // letting go early makes a small hop
 }
 export function canvasPoint(e) { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height }; }
 
@@ -59,6 +56,6 @@ export function initInput() {
   });
   window.addEventListener('pointerup', () => jumpRelease());
   window.addEventListener('pointercancel', () => jumpRelease());
-  window.addEventListener('blur', () => { G.held = false; if (G.state === 'play') pauseToggle(); });
+  window.addEventListener('blur', () => { jumpRelease(); if (G.state === 'play') pauseToggle(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden && G.state === 'play') pauseToggle(); });
 }

@@ -1,5 +1,5 @@
 // Best runs, saved in localStorage.
-import { G } from '../game/state.js';
+import { G } from '../state.js';
 import { store } from '../util.js';
 
 export function scores() { const s = store.get('mossRunner.scores', []); return Array.isArray(s) ? s : []; }

@@ -2,8 +2,8 @@
 import { Sfx } from '../audio/sfx.js';
 import { drawCritter } from '../character/sprite.js';
 import { CREAM, DAY, H, LEAF, MOSS, MOVES, PX_PER_M, W, need } from '../config.js';
-import { BOSS_NAME, drawBossHUD } from '../game/boss.js';
-import { G } from '../game/state.js';
+import { BOSS_NAME, drawBossHUD } from './boss.js';
+import { G } from '../state.js';
 import { bestScore } from '../ui/scores.js';
 import { circ, clamp, ell, rr } from '../util.js';
 

@@ -1,13 +1,16 @@
 // Draws one frame.
 import { GROUND, H, W } from '../config.js';
-import { drawBoss, drawHazards } from '../game/boss.js';
-import { G, K, cx } from '../game/state.js';
+import { drawBoss, drawHazards } from './boss.js';
+import { G, K, cx } from '../state.js';
 import { drawHUD } from './hud.js';
 import { NEST_STUMP_H, drawBackground, drawNest, drawObstacle, drawOrb, drawParts, drawPlayer, drawSeeds, drawShouts } from './scene.js';
 import { rand } from '../util.js';
 
+let titleScroll = 0; // the title backdrop scrolls on its own; the engine is idle there
+
 export function render() {
   const c = cx;
+  if (G.state === 'title') G.scroll = (titleScroll += 0.6);
   c.setTransform(K, 0, 0, K, 0, 0);
   c.save();
   if (G.shake > 0) c.translate(rand(-G.shake, G.shake) * 0.6, rand(-G.shake, G.shake) * 0.6);
@@ -30,9 +33,6 @@ export function render() {
     if (G.storm) { const g = c.createLinearGradient(G.storm.x - 160, 0, G.storm.x + 20, 0); g.addColorStop(0, 'rgba(156,204,74,0)'); g.addColorStop(1, 'rgba(156,204,74,0.28)'); c.fillStyle = g; c.fillRect(G.storm.x - 160, 0, 180, GROUND); }
     drawParts(c, true);
     drawShouts(c);
-  } else {
-    // title backdrop: a calm scrolling forest
-    G.scroll += 0.6;
   }
   c.restore();
   if (G.state !== 'title') drawHUD(c);

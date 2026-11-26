@@ -1,8 +1,9 @@
-// Game constants. Moss's palette, XP curve and moves come from the Moss pet mod.
+// Constants for drawing. The rules (sizes, moves, XP curve) come from the Rust engine, so
+// there's one source of truth; the colours and palettes live here.
+import { CFG, xpNeeded } from './engine.js';
 
-export const W = 960, H = 420, GROUND = 352, PX_PER_M = 30;
-export const PLAYER_X = 170, SPRITE_S = 0.46;
-export const GRAV = 2600, JUMP_V = -830, JUMP_CUT = -330, GLIDE_VMAX = 115, BUFFER = 0.13, COYOTE = 0.08;
+export const { w: W, h: H, ground: GROUND, pxPerM: PX_PER_M, playerX: PLAYER_X } = CFG;
+export const SPRITE_S = 0.46;
 
 export const MOSS = {
   body: '#7fa86b', dark: '#557d47', belly: '#eaf1d8', ring: '#3f5f36', iris: '#f4b23c',
@@ -11,15 +12,9 @@ export const MOSS = {
 export const LEAF = '#6aa35e', CREAM = '#faf0d6';
 
 // Moss's own XP curve: XP needed to go from `level` to `level + 1`.
-export const need = level => 17 + 5 * level;
-export const XP = { orb: 3, gold: 10, smash: 4, dummy: 15, nest: 20 };
-
-export const MOVES = [
-  { id: 'brave-bird', name: 'Brave Bird', key: '1', alt: 'z', lv: 2, cd: 6, desc: 'glowing dash through anything' },
-  { id: 'double-team', name: 'Double Team', key: '2', alt: 'x', lv: 3, cd: 16, desc: 'decoys take one hit for you' },
-  { id: 'seed-bomb', name: 'Seed Bomb', key: '3', alt: 'c', lv: 4, cd: 7, desc: 'blasts the obstacles ahead' },
-  { id: 'leaf-storm', name: 'Leaf Storm', key: '4', alt: 'v', lv: 6, cd: 28, desc: 'clears the whole screen' },
-];
+export const need = xpNeeded;
+/** The four moves: id, name, key, level learned, cooldown, description. */
+export const MOVES = CFG.moves;
 
 export const DAY = [
   { name: 'Morning', sky: ['#9fd3ea', '#e8f5dc'], sun: '#fff3b0', far: '#a9c99a', near: '#88b378', tree: '#5f9150', treeDk: '#4a7a3f', ground: '#7a5a3a', grass: '#6aa35e', cloud: '#ffffff', stars: false },

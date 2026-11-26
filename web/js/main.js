@@ -1,6 +1,6 @@
 // Entry point: wires up the title screen and runs the game loop.
 import { Sfx } from './audio/sfx.js';
-import { G, newPlayer, restartRun, startStage } from './game/state.js';
+import { nextStage, restartRun } from './state.js';
 import { startLoop } from './loop.js';
 import { initInput } from './ui/input.js';
 import { $, pauseToggle, previewT, pv, startFromTitle, toTitle, updatePreview } from './ui/panels.js';
@@ -18,12 +18,11 @@ $('startBtn').addEventListener('click', startFromTitle);
 $('againBtn').addEventListener('click', () => restartRun());
 $('practiceBtn').addEventListener('click', () => startFromTitle(true));
 $('editBtn').addEventListener('click', toTitle);
-$('nextBtn').addEventListener('click', () => startStage(G.stage + 1));
+$('nextBtn').addEventListener('click', nextStage);
 $('resumeBtn').addEventListener('click', pauseToggle);
 pv.addEventListener('click', () => { Sfx.init(); Sfx.cry(previewT); });
 
 initInput();
-G.player = newPlayer();
 toTitle();
 if (/[?&]boss\b/.test(location.search)) startFromTitle(true);
 startLoop();

@@ -1,10 +1,11 @@
 // Drawing the world: sky, hills, obstacles, the nest, orbs, the player and particles.
 import { drawCritter, drawGhostCopy } from '../character/sprite.js';
 import { CREAM, DAY, GROUND, H, MOSS, PLAYER_X, SPRITE_S, W } from '../config.js';
-import { G } from '../game/state.js';
+import { CFG } from '../engine.js';
+import { G } from '../state.js';
 import { circ, clamp, ell, h01, rad, rgba, rr, shade } from '../util.js';
 
-export const NEST_STUMP_H = 58, NEST_SEAT = GROUND - NEST_STUMP_H - 8;
+export const { nestStumpH: NEST_STUMP_H, nestSeat: NEST_SEAT } = CFG;
 export function nestScreenX() { return PLAYER_X + (G.stageLen - G.dist); }
 
 export function drawBackground(c) {
